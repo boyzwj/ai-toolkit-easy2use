@@ -417,6 +417,16 @@ const docs: { [key: string]: ConfigDoc } = {
       </>
     ),
   },
+  'dataset.num_repeats': {
+    title: '重复次数',
+    description: (
+      <>
+        重复次数允许您将数据集中的项目重复多次。当您使用多个数据集并希望平衡每个数据集的样本数量时，这非常有用。
+        例如，如果您有一个包含10张图片的小数据集和一个包含100张图片的大数据集，您可以将小数据集设置为10次重复，
+        使其有效地变成100张图片，从而使两个数据集在训练期间出现的频率相同。
+      </>
+    ),
+  },
 };
 
 export const getDoc = (key: string | null | undefined): ConfigDoc | null => {
