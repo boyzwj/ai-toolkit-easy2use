@@ -95,9 +95,50 @@ class Flux2Model(BaseModel):
         dtype = self.torch_dtype
         self.print_and_status_update("Loading Mistral")
 
+        # Check for local Mistral model
+        te_path = MISTRAL_PATH
+        tokenizer_path = MISTRAL_PATH
+        model_path = self.model_config.name_or_path
+        
+        # Check priority: 1. model_path/text_encoder, 2. model_path/mistral, 3. model_path itself
+        possible_paths = [
+            os.path.join(model_path, "text_encoder"),
+            os.path.join(model_path, "mistral"),
+            model_path
+        ]
+        
+        if os.path.isfile(model_path):
+            model_dir = os.path.dirname(model_path)
+            possible_paths.extend([
+                os.path.join(model_dir, "text_encoder"),
+                os.path.join(model_dir, "mistral"),
+                model_dir
+            ])
+        
+        found_local = False
+        for p in possible_paths:
+            # Check for config.json as a marker for a transformer model
+            if os.path.exists(os.path.join(p, "config.json")):
+                te_path = p
+                self.print_and_status_update(f"Found local Mistral at {te_path}")
+                
+                # Check for tokenizer in the same folder or in 'tokenizer' subfolder
+                if os.path.exists(os.path.join(p, "tokenizer_config.json")):
+                    tokenizer_path = p
+                elif os.path.exists(os.path.join(os.path.dirname(p), "tokenizer", "tokenizer_config.json")):
+                     tokenizer_path = os.path.join(os.path.dirname(p), "tokenizer")
+                elif os.path.exists(os.path.join(model_path, "tokenizer", "tokenizer_config.json")):
+                    tokenizer_path = os.path.join(model_path, "tokenizer")
+                else:
+                    # Fallback to te_path if we can't find it elsewhere, might download
+                    tokenizer_path = p
+                
+                found_local = True
+                break
+
         text_encoder: Mistral3ForConditionalGeneration = (
             Mistral3ForConditionalGeneration.from_pretrained(
-                MISTRAL_PATH,
+                te_path,
                 torch_dtype=dtype,
             )
         )
@@ -121,7 +162,7 @@ class Flux2Model(BaseModel):
                 offload_percent=self.model_config.layer_offloading_text_encoder_percent,
             )
 
-        tokenizer = AutoProcessor.from_pretrained(MISTRAL_PATH)
+        tokenizer = AutoProcessor.from_pretrained(tokenizer_path)
         return text_encoder, tokenizer
 
     def load_model(self):
@@ -139,7 +180,7 @@ class Flux2Model(BaseModel):
         if os.path.exists(os.path.join(transformer_path, self.flux2_te_filename)):
             transformer_path = os.path.join(transformer_path, self.flux2_te_filename)
 
-        if not os.path.exists(transformer_path):
+        if not os.path.exists(transformer_path) or os.path.isdir(transformer_path):
             # assume it is from the hub
             transformer_path = huggingface_hub.hf_hub_download(
                 repo_id=model_path,
@@ -188,18 +229,27 @@ class Flux2Model(BaseModel):
 
         if os.path.exists(os.path.join(model_path, FLUX2_VAE_FILENAME)):
             vae_path = os.path.join(model_path, FLUX2_VAE_FILENAME)
+        elif os.path.exists(os.path.join(model_path, "vae", FLUX2_VAE_FILENAME)):
+             vae_path = os.path.join(model_path, "vae", FLUX2_VAE_FILENAME)
 
         if vae_path is None:
             vae_path = self.flux2_vae_path
 
         if vae_path is None or not os.path.exists(vae_path):
             p = vae_path if vae_path is not None else model_path
-            # assume it is from the hub
-            vae_path = huggingface_hub.hf_hub_download(
-                repo_id=p,
-                filename=FLUX2_VAE_FILENAME,
-                token=HF_TOKEN,
-            )
+            
+            # Check for local VAE in model_path
+            if os.path.exists(os.path.join(model_path, "vae", FLUX2_VAE_FILENAME)):
+                vae_path = os.path.join(model_path, "vae", FLUX2_VAE_FILENAME)
+            elif os.path.exists(os.path.join(model_path, FLUX2_VAE_FILENAME)):
+                vae_path = os.path.join(model_path, FLUX2_VAE_FILENAME)
+            else:
+                 # assume it is from the hub
+                vae_path = huggingface_hub.hf_hub_download(
+                    repo_id=p,
+                    filename=FLUX2_VAE_FILENAME,
+                    token=HF_TOKEN,
+                )
         with torch.device("meta"):
             vae = AutoEncoder(AutoEncoderParams())
 
