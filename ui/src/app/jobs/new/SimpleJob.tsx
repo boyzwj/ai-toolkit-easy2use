@@ -504,6 +504,7 @@ export default function SimpleJob({
                     { value: 'adamw8bit', label: 'AdamW8Bit' },
                     { value: 'adafactor', label: 'Adafactor' },
                     { value: 'adamwfp8', label: 'AdamWFP8' },
+                    { value: 'prodigy_8bit', label: 'Prodigy 8bit' },
                   ]}
                   docKey="train.optimizer"
                 />
