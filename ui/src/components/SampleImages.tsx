@@ -146,25 +146,17 @@ export default function SampleImages({ job }: SampleImagesProps) {
     );
   }, [status, sampleImages.length]);
 
-  // 将样例图栅格改为响应式：
-  // - 手机端两列（更易于浏览）
-  // - 随屏幕大小逐步增加列数，但限制为最多 8 列
-  // 直接返回明确的 Tailwind 类，避免被构建时清理
-  const gridColsClass = useMemo(() => {
-    // 当每次采样只生成1张图片时，默认从单列开始，避免出现大面积空白
-    const cols = Math.min(numSamples, 8);
-    const map: { [key: number]: string } = {
-      1: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3',
-      2: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
-      3: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
-      4: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
-      5: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6',
-      6: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7',
-      7: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7',
-      8: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8',
-    };
-    return map[cols] || 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4';
-  }, [numSamples]);
+  // 改回按批次分行显示的设计
+  // 使用 useMemo 将图片按批次分组
+  const sampleBatches = useMemo(() => {
+    const batches = [];
+    if (!sampleImages || sampleImages.length === 0) return batches;
+    
+    for (let i = 0; i < sampleImages.length; i += numSamples) {
+      batches.push(sampleImages.slice(i, i + numSamples));
+    }
+    return batches;
+  }, [sampleImages, numSamples]);
 
   const sampleConfig = useMemo(() => {
     if (job?.job_config) {
@@ -188,25 +180,19 @@ export default function SampleImages({ job }: SampleImagesProps) {
     <div ref={containerRef} className="absolute top-[80px] left-0 right-0 bottom-0 overflow-y-auto">
       <div className="pb-4">
         {PageInfoContent}
-        {sampleImages && (
-          <div className={`grid ${gridColsClass} gap-1`}>
-            {sampleImages.map((sample: string, idx: number) => {
-              // Compute current group (groups are size = numSamples)
-              const groupIndex = Math.floor(idx / numSamples);
-              const groupStart = groupIndex * numSamples;
-              const groupEnd = Math.min(groupStart + numSamples, sampleImages.length);
-              const groupSize = groupEnd - groupStart;
-              const isEndOfGroup = idx === groupEnd - 1;
-
-              // Only enforce a MIN of 3 when the group's planned width is < 3
-              // 当单张采样时不进行占位填充，避免“每次采样之间有两格空白”的视觉问题
-              const MIN_COLS = numSamples <= 1 ? 1 : 3;
-              const shouldPad = numSamples < MIN_COLS && groupSize < MIN_COLS;
-              const padsNeeded = shouldPad ? MIN_COLS - groupSize : 0;
-
-              return (
-                <div key={sample} className="contents">
+        {sampleImages && sampleImages.length > 0 && (
+          <div className="flex flex-col gap-2 p-2">
+            {sampleBatches.map((batch, batchIdx) => (
+              <div 
+                key={batchIdx} 
+                className="grid gap-2"
+                style={{ 
+                  gridTemplateColumns: `repeat(${Math.min(batch.length, 8)}, minmax(0, 1fr))` 
+                }}
+              >
+                {batch.map((sample) => (
                   <SampleImageCard
+                    key={sample}
                     imageUrl={sample}
                     numSamples={numSamples}
                     sampleImages={sampleImages}
@@ -214,15 +200,9 @@ export default function SampleImages({ job }: SampleImagesProps) {
                     onClick={() => setSelectedSamplePath(sample)}
                     observerRoot={containerRef.current}
                   />
-
-                  {isEndOfGroup &&
-                    padsNeeded > 0 &&
-                    Array.from({ length: padsNeeded }).map((_, i) => (
-                      <div key={`pad-${groupIndex}-${i}`} className="invisible" />
-                    ))}
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            ))}
           </div>
         )}
       </div>
