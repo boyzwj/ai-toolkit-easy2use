@@ -461,6 +461,43 @@ export const modelArchs: ModelArch[] = [
     },
   },
   {
+    name: 'firered_image_edit_1_1',
+    label: 'FireRed-Image-Edit-1.1',
+    group: 'instruction',
+    defaults: {
+      // FireRed-Image-Edit-1.1 uses the Qwen Image Edit Plus compatible pipeline.
+      'config.process[0].model.name_or_path': ['FireRedTeam/FireRed-Image-Edit-1.1', defaultNameOrPath],
+      'config.process[0].model.arch': ['qwen_image_edit_plus', 'flex1'],
+      'config.process[0].model.quantize': [true, false],
+      'config.process[0].model.quantize_te': [true, false],
+      'config.process[0].model.low_vram': [true, false],
+      'config.process[0].train.unload_text_encoder': [false, false],
+      'config.process[0].sample.sampler': ['flowmatch', 'flowmatch'],
+      'config.process[0].train.noise_scheduler': ['flowmatch', 'flowmatch'],
+      'config.process[0].train.timestep_type': ['weighted', 'sigmoid'],
+      'config.process[0].train.lr': [0.00002, 0.0001],
+      'config.process[0].model.qtype': ['qfloat8', 'qfloat8'],
+      'config.process[0].network.linear': [128, 32],
+      'config.process[0].network.linear_alpha': [128, 32],
+      'config.process[0].sample.width': [512, 1024],
+      'config.process[0].sample.height': [512, 1024],
+      'config.process[0].model.model_kwargs': [
+        {
+          match_target_res: false,
+        },
+        {},
+      ],
+    },
+    disableSections: ['network.conv', 'train.unload_text_encoder'],
+    additionalSections: [
+      'datasets.multi_control_paths',
+      'sample.multi_ctrl_imgs',
+      'model.low_vram',
+      'model.layer_offloading',
+      'model.qie.match_target_res',
+    ],
+  },
+  {
     name: 'hidream',
     label: 'HiDream',
     group: 'image',

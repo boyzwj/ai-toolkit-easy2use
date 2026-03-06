@@ -120,6 +120,13 @@ npm run build_and_start
 - 构建时提示 `Module not found: Can't resolve 'recharts'`？
   - 这是新版本引入的图表库，请在 `ui` 目录下运行 `npm install recharts` 进行安装。
 
+## FireRed-Image-Edit-1.1 预设说明
+
+- 训练 UI 已新增 `FireRed-Image-Edit-1.1` 预设，适用于基于该模型的 LoRA 训练起步配置。
+- 该预设复用当前仓库中的 `qwen_image_edit_plus` 兼容链路，底层按 `QwenImageEditPlusPipeline` 方式加载。
+- 这是一份 ai-toolkit 风格预设，不是 FireRed 原仓 `train_lora.sh` 的逐项复刻；未直接映射的 FireRed 专属训练参数继续沿用 ai-toolkit 现有机制。
+- 推荐优先从示例配置 `config/examples/train_lora_firered_image_edit_1_1_32gb.yaml` 启动，再按你的显存和数据集情况微调。
+
 ## 致谢与说明
 
 - 本仓库以更易用为目标进行中文化与体验优化，基于原 AI Toolkit 项目实现。

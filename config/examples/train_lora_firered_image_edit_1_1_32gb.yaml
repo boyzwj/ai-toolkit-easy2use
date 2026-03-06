@@ -1,0 +1,83 @@
+---
+job: extension
+config:
+  # this name will be the folder and filename name
+  name: "my_first_firered_image_edit_1_1_lora_v1"
+  process:
+    - type: 'diffusion_trainer'
+      # root folder to save training sessions/samples/weights
+      training_folder: "output"
+      # uncomment to see performance stats in the terminal every N steps
+#      performance_log_every: 1000
+      device: cuda:0
+      network:
+        type: "lora"
+        linear: 128
+        linear_alpha: 128
+      save:
+        dtype: float16 # precision to save
+        save_every: 250 # save every this many steps
+        max_step_saves_to_keep: 4 # how many intermittent saves to keep
+      datasets:
+        # datasets are a folder of images. captions need to be txt files with the same name as the image
+        # for instance image2.jpg and image2.txt. Only jpg, jpeg, and png are supported currently
+        # images will automatically be resized and bucketed into the resolution specified
+        # on windows, escape back slashes with another backslash so
+        # "C:\\path\\to\\images\\folder"
+        - folder_path: "/path/to/images/folder"
+          # can do up to 3 control image folders, file names must match target file names, but aspect/size can be different
+          control_path:
+            - "/path/to/control/images/folder1"
+            - "/path/to/control/images/folder2"
+            - "/path/to/control/images/folder3"
+          caption_ext: "txt"
+          caption_dropout_rate: 0.05
+          resolution: [ 512, 768, 1024 ]
+      train:
+        batch_size: 1
+        cache_text_embeddings: true
+        steps: 3000
+        gradient_accumulation: 1
+        timestep_type: "weighted"
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: "flowmatch"
+        optimizer: "adamw8bit"
+        lr: 2e-5
+        dtype: bf16
+      model:
+        # FireRed-Image-Edit-1.1 is loaded through the QwenImageEditPlusPipeline-compatible path.
+        name_or_path: "FireRedTeam/FireRed-Image-Edit-1.1"
+        arch: "qwen_image_edit_plus"
+        quantize: true
+        quantize_te: true
+        qtype: "qfloat8"
+        qtype_te: "qfloat8"
+        low_vram: true
+        model_kwargs:
+          match_target_res: false
+      sample:
+        sampler: "flowmatch"
+        sample_every: 250
+        width: 512
+        height: 512
+        # you can provide up to 3 control images here
+        samples:
+          - prompt: "Blend the reference elements into a single polished edit."
+            ctrl_img_1: "/path/to/image1.png"
+            ctrl_img_2: "/path/to/image2.png"
+          - prompt: "Keep the subject identity but update the styling and composition."
+            ctrl_img_1: "/path/to/image1.png"
+            ctrl_img_2: "/path/to/image2.png"
+          - prompt: "Create a cleaner portrait edit with stronger accessory consistency."
+            ctrl_img_1: "/path/to/image1.png"
+            ctrl_img_2: "/path/to/image2.png"
+        neg: ""
+        seed: 42
+        walk_seed: true
+        guidance_scale: 3
+        sample_steps: 25
+meta:
+  name: "[name]"
+  version: '1.0'

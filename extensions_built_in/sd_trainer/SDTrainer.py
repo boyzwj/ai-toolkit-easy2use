@@ -318,6 +318,14 @@ class SDTrainer(BaseSDTrainProcess):
                 self.device_torch,
                 dtype=self.sd.torch_dtype
             ).detach()
+
+        if self.train_config.diff_output_preservation and self.diff_output_preservation_embeds is None:
+            self.diff_output_preservation_embeds = self.sd.encode_prompt(
+                self.train_config.diff_output_preservation_class
+            ).to(
+                self.device_torch,
+                dtype=self.sd.torch_dtype
+            ).detach()
         
         if self.train_config.diffusion_feature_extractor_path is not None:
             vae = self.sd.vae
