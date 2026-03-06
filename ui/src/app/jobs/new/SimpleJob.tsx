@@ -611,6 +611,17 @@ export default function SimpleJob({
                   ]}
                   docKey="train.loss_type"
                 />
+                {modelArch?.additionalSections?.includes('train.audio_loss_multiplier') && (
+                  <NumberInput
+                    label="Audio Loss Multiplier"
+                    className="pt-2"
+                    value={jobConfig.config.process[0].train.audio_loss_multiplier ?? 1.0}
+                    onChange={value => setJobConfig(value, 'config.process[0].train.audio_loss_multiplier')}
+                    placeholder="eg. 1.0"
+                    docKey={'train.audio_loss_multiplier'}
+                    min={0}
+                  />
+                )}
               </div>
               <div>
                 <FormGroup label="EMA（指数移动平均）">

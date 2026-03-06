@@ -303,6 +303,14 @@ class SDTrainer(BaseSDTrainProcess):
                     unload_text_encoder(self.sd)
                 else:
                     self.sd.text_encoder_to("cpu")
+
+        if self.train_config.diff_output_preservation and self.diff_output_preservation_embeds is None:
+            self.diff_output_preservation_embeds = self.sd.encode_prompt(
+                self.train_config.diff_output_preservation_class
+            ).to(
+                self.device_torch,
+                dtype=self.sd.torch_dtype
+            ).detach()
                 flush()
         
         if self.train_config.blank_prompt_preservation and self.cached_blank_embeds is None:
@@ -490,8 +498,35 @@ class SDTrainer(BaseSDTrainProcess):
                 dfe_loss = torch.nn.functional.mse_loss(pred_features, target_features, reduction="none") * \
                     self.train_config.diffusion_feature_extractor_weight * dfe_scaler
                 additional_loss += dfe_loss.mean()
-            elif self.dfe.version in [2, 3, 4, 5]:
-                pass
+<<<<<<< HEAD
+            elif self.dfe.version == 2:
+                # version 2
+                # do diffusion feature extraction on target
+                with torch.no_grad():
+                    rectified_flow_target = noise.float() - batch.latents.float()
+                    target_feature_list = self.dfe(torch.cat([rectified_flow_target, noise.float()], dim=1))
+                
+                # do diffusion feature extraction on prediction
+                pred_feature_list = self.dfe(torch.cat([noise_pred.float(), noise.float()], dim=1))
+                
+                dfe_loss = 0.0
+                for i in range(len(target_feature_list)):
+                    dfe_loss += torch.nn.functional.mse_loss(pred_feature_list[i], target_feature_list[i], reduction="mean")
+                
+                additional_loss += dfe_loss * self.train_config.diffusion_feature_extractor_weight * 100.0
+            elif self.dfe.version in [3, 4, 5, 6]:
+                dfe_loss = self.dfe(
+                    noise=noise,
+                    noise_pred=noise_pred,
+                    noisy_latents=noisy_latents,
+                    timesteps=timesteps,
+                    batch=batch,
+                    scheduler=self.sd.noise_scheduler
+                )
+                additional_loss += dfe_loss * self.train_config.diffusion_feature_extractor_weight 
+            else:
+                raise ValueError(f"Unknown diffusion feature extractor version {self.dfe.version}")
+
         if self.train_config.do_guidance_loss:
             with torch.no_grad():
                 unconditional_embeds = concat_prompt_embeds([self.unconditional_embeds] * noisy_latents.shape[0],)
@@ -545,6 +580,7 @@ class SDTrainer(BaseSDTrainProcess):
         # check for audio loss
         if batch.audio_pred is not None and batch.audio_target is not None:
             audio_loss = torch.nn.functional.mse_loss(batch.audio_pred.float(), batch.audio_target.float(), reduction="mean")
+            audio_loss = audio_loss * self.train_config.audio_loss_multiplier
             loss = loss + audio_loss
 
         # check for additional losses
@@ -1315,4 +1351,3 @@ class SDTrainer(BaseSDTrainProcess):
         loss_dict = OrderedDict({'loss': (total_loss / len(batch_list)).item()})
         self.end_of_training_loop()
         return loss_dict
-
