@@ -311,18 +311,9 @@ class SDTrainer(BaseSDTrainProcess):
                 self.device_torch,
                 dtype=self.sd.torch_dtype
             ).detach()
-                flush()
         
         if self.train_config.blank_prompt_preservation and self.cached_blank_embeds is None:
             self.cached_blank_embeds = self.sd.encode_prompt("").to(
-                self.device_torch,
-                dtype=self.sd.torch_dtype
-            ).detach()
-
-        if self.train_config.diff_output_preservation and self.diff_output_preservation_embeds is None:
-            self.diff_output_preservation_embeds = self.sd.encode_prompt(
-                self.train_config.diff_output_preservation_class
-            ).to(
                 self.device_torch,
                 dtype=self.sd.torch_dtype
             ).detach()
@@ -506,7 +497,6 @@ class SDTrainer(BaseSDTrainProcess):
                 dfe_loss = torch.nn.functional.mse_loss(pred_features, target_features, reduction="none") * \
                     self.train_config.diffusion_feature_extractor_weight * dfe_scaler
                 additional_loss += dfe_loss.mean()
-<<<<<<< HEAD
             elif self.dfe.version == 2:
                 # version 2
                 # do diffusion feature extraction on target
