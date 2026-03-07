@@ -461,13 +461,12 @@ export const modelArchs: ModelArch[] = [
     },
   },
   {
-    name: 'firered_image_edit_1_1',
+    name: 'qwen_image_edit_plus:firered',
     label: 'FireRed-Image-Edit-1.1',
     group: 'instruction',
     defaults: {
       // FireRed-Image-Edit-1.1 uses the Qwen Image Edit Plus compatible pipeline.
       'config.process[0].model.name_or_path': ['FireRedTeam/FireRed-Image-Edit-1.1', defaultNameOrPath],
-      'config.process[0].model.arch': ['qwen_image_edit_plus', 'flex1'],
       'config.process[0].model.quantize': [true, false],
       'config.process[0].model.quantize_te': [true, false],
       'config.process[0].model.low_vram': [true, false],
