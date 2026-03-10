@@ -185,3 +185,7 @@ aitk_db.db
 .vscode/
 AI-ToolKit-E2U-portable/
 AI-ToolKit-E2U-portable.zip
+docs/plans/2026-03-10-windows-portable-runtime-bundle.md
+scripts/build_portable.ps1
+scripts/portable/start_portable.bat
+testing/test_portable_bundle.py
