@@ -77,7 +77,7 @@ dit_prefix = "model.diffusion_model."
 vae_prefix = "vae."
 audio_vae_prefix = "audio_vae."
 vocoder_prefix = "vocoder."
-base_te_path = "google/gemma-3-12b-it-qat-q4_0-unquantized"
+base_te_path = "Lightricks/gemma-3-12b-it-qat-q4_0-unquantized"
 
 HF_TOKEN = os.getenv("HF_TOKEN", None)
 
@@ -121,6 +121,10 @@ class ComboVae(torch.nn.Module):
     @property
     def dtype(self):
         return self.vae.dtype
+
+    @property
+    def config(self):
+        return self.vae.config
 
     def encode(
         self,
@@ -223,6 +227,9 @@ class LTX2Model(BaseModel):
         # gemma needs left side padding
         self.te_padding_side = "left"
 
+        # invalidate older caches
+        self.latent_space_version = f"{self.arch}_v2"
+
     # static method to get the noise scheduler
     @staticmethod
     def get_train_scheduler():
@@ -240,7 +247,7 @@ class LTX2Model(BaseModel):
         combined_state_dict = None
 
         self.print_and_status_update("Loading transformer")
-        
+
         if not os.path.exists(model_path) and model_path.endswith(".safetensors"):
             # download the model from the Hugging Face Hub if it is not a local path
             splits = model_path.split("/")
@@ -254,7 +261,7 @@ class LTX2Model(BaseModel):
                 filename=splits[2],
                 token=HF_TOKEN,
             )
-        
+
         # if we have a safetensors file it is a mono checkpoint
         if os.path.exists(model_path) and model_path.endswith(".safetensors"):
             combined_state_dict = load_file(model_path)
@@ -264,7 +271,9 @@ class LTX2Model(BaseModel):
             original_dit_ckpt = get_model_state_dict_from_combined_ckpt(
                 combined_state_dict, dit_prefix
             )
-            transformer = convert_ltx2_transformer(original_dit_ckpt, version=self.ltx_version)
+            transformer = convert_ltx2_transformer(
+                original_dit_ckpt, version=self.ltx_version
+            )
             transformer = transformer.to(dtype)
         else:
             transformer_path = model_path
@@ -389,24 +398,27 @@ class LTX2Model(BaseModel):
             text_encoder.load_state_dict(te_state_dict, assign=True, strict=True)
             del te_state_dict
             flush()
-        else:
-            te_tokenizer_subfolder = "tokenizer"
-            te_model_subfolder = "text_encoder"
-            if self.model_config.te_name_or_path is not None:
-                te_path = self.model_config.te_name_or_path
-            else:
-                if self.ltx_te_path is not None:
-                    # pull from original repo for 2.3
-                    te_path = self.ltx_te_path
-                    te_tokenizer_subfolder = ""
-                    te_model_subfolder = ""
-                else:
-                    te_path = base_te_path
+        elif self.model_config.te_name_or_path is not None:
+            # a repo or folder
             tokenizer = GemmaTokenizerFast.from_pretrained(
-                te_path, subfolder=te_tokenizer_subfolder
+                self.model_config.te_name_or_path
             )
             text_encoder = Gemma3ForConditionalGeneration.from_pretrained(
-                te_path, subfolder=te_model_subfolder, dtype=dtype
+                self.model_config.te_name_or_path, dtype=dtype
+            )
+        elif self.ltx_te_path is not None:
+            # pull from model specific te
+            tokenizer = GemmaTokenizerFast.from_pretrained(self.ltx_te_path)
+            text_encoder = Gemma3ForConditionalGeneration.from_pretrained(
+                self.ltx_te_path, dtype=dtype
+            )
+        else:
+            # using combo hf repo
+            tokenizer = GemmaTokenizerFast.from_pretrained(
+                self.model_config.name_or_path, subfolder="tokenizer"
+            )
+            text_encoder = Gemma3ForConditionalGeneration.from_pretrained(
+                self.model_config.name_or_path, subfolder="text_encoder", dtype=dtype
             )
 
         # remove the vision tower
@@ -440,22 +452,30 @@ class LTX2Model(BaseModel):
             original_vae_ckpt = get_model_state_dict_from_combined_ckpt(
                 combined_state_dict, vae_prefix
             )
-            vae = convert_ltx2_video_vae(original_vae_ckpt, version=self.ltx_version).to(dtype)
+            vae = convert_ltx2_video_vae(
+                original_vae_ckpt, version=self.ltx_version
+            ).to(dtype)
             del original_vae_ckpt
             original_audio_vae_ckpt = get_model_state_dict_from_combined_ckpt(
                 combined_state_dict, audio_vae_prefix
             )
-            audio_vae = convert_ltx2_audio_vae(original_audio_vae_ckpt, version=self.ltx_version).to(dtype)
+            audio_vae = convert_ltx2_audio_vae(
+                original_audio_vae_ckpt, version=self.ltx_version
+            ).to(dtype)
             del original_audio_vae_ckpt
             original_connectors_ckpt = get_model_state_dict_from_combined_ckpt(
                 combined_state_dict, dit_prefix
             )
-            connectors = convert_ltx2_connectors(original_connectors_ckpt, version=self.ltx_version).to(dtype)
+            connectors = convert_ltx2_connectors(
+                original_connectors_ckpt, version=self.ltx_version
+            ).to(dtype)
             del original_connectors_ckpt
             original_vocoder_ckpt = get_model_state_dict_from_combined_ckpt(
                 combined_state_dict, vocoder_prefix
             )
-            vocoder = convert_ltx2_vocoder(original_vocoder_ckpt, version=self.ltx_version).to(dtype)
+            vocoder = convert_ltx2_vocoder(
+                original_vocoder_ckpt, version=self.ltx_version
+            ).to(dtype)
             del original_vocoder_ckpt
             del combined_state_dict
             flush()
@@ -541,6 +561,13 @@ class LTX2Model(BaseModel):
         self.pipeline.vae.eval()
         self.pipeline.vae.requires_grad_(False)
 
+        if self.model_config.low_vram:
+            self.pipeline.vae.tile_sample_min_num_frames = 64
+            self.pipeline.vae.tile_sample_stride_num_frames = 16
+            # they check the wrong flat on encode currently so set both to future proof
+            self.pipeline.vae.use_framewise_decoding = True
+            self.pipeline.vae.use_framewise_encoding = True
+
         image_list = [image.to(device, dtype=dtype) for image in image_list]
 
         # Normalize shapes
@@ -558,7 +585,7 @@ class LTX2Model(BaseModel):
         # Stack to (B, C, T, H, W)
         images = torch.stack(norm_images)
 
-        latents = self.pipeline.vae.encode(images).latent_dist.mode()
+        latents = self.pipeline.vae.encode(images).latent_dist.sample()
 
         # Normalize latents across the channel dimension [B, C, F, H, W]
         scaling_factor = 1.0
@@ -569,6 +596,10 @@ class LTX2Model(BaseModel):
             latents.device, latents.dtype
         )
         latents = (latents - latents_mean) * scaling_factor / latents_std
+
+        if self.model_config.low_vram:
+            self.pipeline.vae.use_framewise_decoding = False
+            self.pipeline.vae.use_framewise_encoding = False
 
         return latents.to(device, dtype=dtype)
 
@@ -653,29 +684,34 @@ class LTX2Model(BaseModel):
 
         if self.low_vram:
             # set vae to tile decode
-            pipeline.vae.enable_tiling(
-                tile_sample_min_height=256,
-                tile_sample_min_width=256,
-                tile_sample_min_num_frames=8,
-                tile_sample_stride_height=224,
-                tile_sample_stride_width=224,
-                tile_sample_stride_num_frames=4,
-            )
+            # pipeline.vae.enable_tiling(
+            #     tile_sample_min_height=256,
+            #     tile_sample_min_width=256,
+            #     tile_sample_min_num_frames=8,
+            #     tile_sample_stride_height=224,
+            #     tile_sample_stride_width=224,
+            #     tile_sample_stride_num_frames=4,
+            # )
+            self.pipeline.vae.tile_sample_min_num_frames = 16
+            self.pipeline.vae.tile_sample_stride_num_frames = 8
+            self.pipeline.vae.use_framewise_decoding = True
 
         # We only encode and store the minimum prompt tokens, but need them padded to 1024 for LTX2
         conditional_embeds = self.pad_embeds(conditional_embeds)
         unconditional_embeds = self.pad_embeds(unconditional_embeds)
-        
+
         if self.ltx_version == "2.3":
-            extra['stg_scale'] = 1.0
-            extra['modality_scale'] = 3.0
-            extra['guidance_rescale'] = 0.7
-            extra['audio_guidance_scale'] = 7.0
-            extra['audio_stg_scale'] = 1.0
-            extra['audio_modality_scale'] = 3.0
-            extra['audio_guidance_rescale'] = 0.7
-            extra['spatio_temporal_guidance_blocks'] = [28]
-            extra['use_cross_timestep'] = True # they dont set this in some examples in diffusers, but I believe it should always be true for 2.3
+            extra["stg_scale"] = 1.0
+            extra["modality_scale"] = 3.0
+            extra["guidance_rescale"] = 0.7
+            extra["audio_guidance_scale"] = 7.0
+            extra["audio_stg_scale"] = 1.0
+            extra["audio_modality_scale"] = 3.0
+            extra["audio_guidance_rescale"] = 0.7
+            extra["spatio_temporal_guidance_blocks"] = [28]
+            extra["use_cross_timestep"] = (
+                True  # they dont set this in some examples in diffusers, but I believe it should always be true for 2.3
+            )
 
         video, audio = pipeline(
             prompt_embeds=conditional_embeds.text_embeds.to(
@@ -703,7 +739,8 @@ class LTX2Model(BaseModel):
         )
         if self.low_vram:
             # Restore no tiling
-            pipeline.vae.use_tiling = False
+            # pipeline.vae.use_tiling = False
+            self.pipeline.vae.use_framewise_decoding = False
 
         if is_video:
             # redurn as a dict, we will handle it with an override function
@@ -760,7 +797,7 @@ class LTX2Model(BaseModel):
             # Encode mel spectrogram to latents
             latents = self.pipeline.audio_vae.encode(
                 mel_spectrogram.to(self.device_torch, dtype=self.torch_dtype)
-            ).latent_dist.mode()
+            ).latent_dist.sample()
 
             if audio_num_frames is None:
                 audio_num_frames = latents.shape[2]  # (latents is [B, C, T, F])
@@ -826,7 +863,7 @@ class LTX2Model(BaseModel):
             video_timestep = timestep.clone()
 
             # i2v from first frame
-            if batch.dataset_config.do_i2v and batch.dataset_config.num_frames > 1:
+            if batch.dataset_config.do_i2v and batch.num_frames > 1:
                 # check to see if we had it cached
                 if batch.first_frame_latents is not None:
                     init_latents = batch.first_frame_latents.to(
@@ -865,15 +902,20 @@ class LTX2Model(BaseModel):
 
                 # use conditioning mask to replace latents
                 latent_model_input = (
-                    latent_model_input * (1 - conditioning_mask)
-                    + init_latents * conditioning_mask
+                    init_latents * conditioning_mask
+                    + latent_model_input * (1 - conditioning_mask)
+                )
+
+                packed_conditioning_mask = self.pipeline._pack_latents(
+                    conditioning_mask,
+                    patch_size=self.pipeline.transformer_spatial_patch_size,
+                    patch_size_t=self.pipeline.transformer_temporal_patch_size,
                 )
 
                 # set video timestep
-                video_timestep = timestep.unsqueeze(-1) * (1 - conditioning_mask)
+                video_timestep = timestep.unsqueeze(-1) * (1 - packed_conditioning_mask)
 
-            # todo get this somehow
-            frame_rate = 24
+            frame_rate = batch.dataset_config.fps
             # check frame dimension
             # Unpacked latents of shape are [B, C, F, H, W] are patched into tokens of shape [B, C, F // p_t, p_t, H // p, p, W // p, p].
             packed_latents = self.pipeline._pack_latents(
@@ -909,9 +951,11 @@ class LTX2Model(BaseModel):
                 num_channels_latents_audio = (
                     self.pipeline.audio_vae.config.latent_channels
                 )
-                duration_s = batch.dataset_config.num_frames / frame_rate
+                duration_s = batch.num_frames / frame_rate
                 audio_latents_per_second = (
-                    self.pipeline.audio_sampling_rate / self.pipeline.audio_hop_length / float(self.pipeline.audio_vae_temporal_compression_ratio)
+                    self.pipeline.audio_sampling_rate
+                    / self.pipeline.audio_hop_length
+                    / float(self.pipeline.audio_vae_temporal_compression_ratio)
                 )
                 audio_num_frames = round(duration_s * audio_latents_per_second)
                 audio_latents = self.pipeline.prepare_audio_latents(
@@ -929,7 +973,8 @@ class LTX2Model(BaseModel):
             if self.pipeline.connectors.device != self.transformer.device:
                 self.pipeline.connectors.to(self.transformer.device)
 
-            tokenizer_padding_side = "left"  # Padding side for default Gemma3-12B text encoder
+            # Padding side for default Gemma3-12B text encoder
+            tokenizer_padding_side = "left"
             if getattr(self, "tokenizer", None) is not None:
                 tokenizer_padding_side = getattr(self.tokenizer, "padding_side", "left")
             (
@@ -954,7 +999,7 @@ class LTX2Model(BaseModel):
             audio_coords = self.transformer.audio_rope.prepare_audio_coords(
                 audio_latents.shape[0], audio_num_frames, audio_latents.device
             )
-        
+
         # use_cross_timestep - Whether to use the cross modality (audio is the cross modality of video, and vice versa) sigma when
         # calculating the cross attention modulation parameters. `True` is the newer (e.g. LTX-2.3) behavior;
         # `False` is the legacy LTX-2.0 behavior.
@@ -966,7 +1011,7 @@ class LTX2Model(BaseModel):
             encoder_hidden_states=connector_prompt_embeds,
             audio_encoder_hidden_states=connector_audio_prompt_embeds,
             timestep=video_timestep,
-            sigma=video_timestep,  # Used by LTX-2.3
+            sigma=timestep,  # Used by LTX-2.3
             audio_timestep=timestep,
             encoder_attention_mask=connector_attention_mask,
             audio_encoder_attention_mask=connector_attention_mask,
@@ -1088,7 +1133,9 @@ class LTX2Model(BaseModel):
         return new_sd
 
     def convert_lora_weights_before_load(self, state_dict):
-        state_dict = convert_lora_original_to_diffusers(state_dict, version=self.ltx_version)
+        state_dict = convert_lora_original_to_diffusers(
+            state_dict, version=self.ltx_version
+        )
         new_sd = {}
         for key, value in state_dict.items():
             new_key = key.replace("diffusion_model.", "transformer.")

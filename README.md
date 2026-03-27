@@ -18,7 +18,7 @@
 - Git（用于拉取仓库）
 - NVIDIA GPU（显存需满足你的训练或推理需求）
 - Python 虚拟环境（建议）
-- Node.js ≥ 18（用于运行 Web UI）
+- Node.js ≥ 20（用于运行 Web UI）
 
 ## 安装（Linux / Windows）
 
@@ -50,7 +50,7 @@ python -m venv venv
 根据你的 CUDA / 显卡环境调整版本。以下为参考示例：
 
 ```bash
-pip install --no-cache-dir torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+pip install --no-cache-dir torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cu128
 ```
 
 ### 4）安装项目依赖
@@ -63,7 +63,7 @@ pip install -r requirements.txt
 
 ### 环境要求
 
-- Node.js ≥ 18
+- Node.js ≥ 20
 
 UI 为基于 Next.js 的 Web 应用。UI 无需持续运行即可执行训练任务，仅在启动/停止/监控任务时需要使用。
 
@@ -116,9 +116,11 @@ npm run build_and_start
 - Windows 环境安装遇到困难？
   - 建议优先确认 Python、CUDA 与驱动版本匹配；也可以考虑使用 WSL（Windows Subsystem for Linux）以获得更稳定的依赖环境。
 - UI 无法访问或接口报错？
-  - 请检查 Node.js 版本（≥18）、依赖是否安装完成（`npm install`）、以及开发服务器是否正常运行（`npm run dev`）。
+  - 请检查 Node.js 版本（≥20）、依赖是否安装完成（`npm install`）、以及开发服务器是否正常运行（`npm run dev`）。
 - 构建时提示 `Module not found: Can't resolve 'recharts'`？
   - 这是新版本引入的图表库，请在 `ui` 目录下运行 `npm install recharts` 进行安装。
+- 需要启用 Hugging Face 高速下载？
+  - 可以在启动前设置环境变量 `HF_HUB_ENABLE_HF_TRANSFER=1`。
 
 ## FireRed-Image-Edit-1.1 预设说明
 
