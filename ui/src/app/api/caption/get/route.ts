@@ -44,8 +44,17 @@ export async function POST(request: NextRequest) {
       return new NextResponse('');
     }
 
-    // Read caption file
-    const caption = fs.readFileSync(captionPath, 'utf-8');
+    // Read caption file. Older Windows-created captions may be encoded as GBK/GB18030.
+    const captionBuffer = fs.readFileSync(captionPath);
+    let caption = '';
+    try {
+      caption = captionBuffer.toString('utf-8');
+      if (caption.includes('�')) {
+        throw new Error('utf-8 decode produced replacement characters');
+      }
+    } catch {
+      caption = new TextDecoder('gb18030').decode(captionBuffer);
+    }
 
     // Return caption
     return new NextResponse(caption);

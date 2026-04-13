@@ -43,6 +43,10 @@ class CaptionConfig:
         self.caption_prompt = kwargs.get(
             "caption_prompt", "Describe this image in detail."
         )
+        self.api_base_url = kwargs.get("api_base_url", None)
+        self.api_key = kwargs.get("api_key", None)
+        self.api_protocol = kwargs.get("api_protocol", "openai")
+        self.api_concurrency = max(1, int(kwargs.get("api_concurrency", 20) or 20))
 
 
 class BaseCaptioner(BaseExtensionProcess):
@@ -80,6 +84,9 @@ class BaseCaptioner(BaseExtensionProcess):
         self.model2 = None
         self.processor2 = None
         self.file_paths = []
+        self.caption_success_count = 0
+        self.caption_failure_count = 0
+        self.caption_failures = []
         self.device_torch = torch.device(self.caption_config.device)
         self.torch_dtype = get_torch_dtype(self.caption_config.dtype)
 
@@ -90,9 +97,31 @@ class BaseCaptioner(BaseExtensionProcess):
         self.load_model()
         self.update_status("running", "Looking for files")
         self.find_files()
-        self.update_status("running", f"Captioning {len(self.file_paths)} files")
+        total_files = len(self.file_paths)
+        if total_files == 0:
+            self.update_status("completed", "没有需要打标的文件")
+            print("")
+            print("****************************************************")
+            print("No files needed captioning")
+            print("****************************************************")
+            return
+        self.update_status("running", f"正在打标 {total_files} 个文件")
         self.run_caption_loop()
-        self.update_status("completed", "Captioning completed")
+
+        if self.caption_failure_count > 0:
+            failure_lines = [
+                f"{os.path.basename(file_path)}: {message}"
+                for file_path, message in self.caption_failures[:3]
+            ]
+            failure_summary = "；".join(failure_lines)
+            raise RuntimeError(
+                f"打标完成，但有 {self.caption_failure_count} 个文件失败，成功 {self.caption_success_count} 个。"
+                + (f" 失败原因：{failure_summary}" if failure_summary else "")
+            )
+
+        self.update_status(
+            "completed", f"打标完成，共成功 {self.caption_success_count} 个文件"
+        )
         print("")
 
         print("****************************************************")
@@ -100,19 +129,34 @@ class BaseCaptioner(BaseExtensionProcess):
         print("****************************************************")
 
     def run_caption_loop(self):
-        for file_path in tqdm.tqdm(
+        total_files = len(self.file_paths)
+        for index, file_path in enumerate(
+            tqdm.tqdm(
             self.file_paths, desc="Captioning files", unit="file"
+            ),
+            start=1,
         ):
             if self.is_ui_captioner:
                 self.maybe_stop()
                 if self.is_stopping:
                     break
             try:
+                self.update_status(
+                    "running",
+                    f"正在打标 {index}/{total_files}：{os.path.basename(file_path)}",
+                )
                 file_caption = self.get_caption_for_file(file_path)
                 if file_caption is not None:
                     self.save_caption_for_file(file_path, file_caption)
+                    self.caption_success_count += 1
             except Exception as e:
                 print(f"Error captioning file {file_path}: {e}")
+                self.caption_failure_count += 1
+                self.caption_failures.append((file_path, str(e)))
+                self.update_status(
+                    "running",
+                    f"打标失败 {self.caption_failure_count} 个，最近失败：{os.path.basename(file_path)} - {e}",
+                )
                 continue
 
     def load_pil_image(self, file_path: str, max_res: Optional[int] = None) -> Image:
@@ -133,7 +177,7 @@ class BaseCaptioner(BaseExtensionProcess):
         # delete it if it already exists
         if os.path.exists(caption_file_path):
             os.remove(caption_file_path)
-        with open(caption_file_path, "w") as f:
+        with open(caption_file_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(caption)
 
     def get_caption_for_file(self, file_path: str) -> str:

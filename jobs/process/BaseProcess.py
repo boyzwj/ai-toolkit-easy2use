@@ -5,6 +5,23 @@ from collections import OrderedDict
 from toolkit.timer import Timer
 
 
+SENSITIVE_CONFIG_KEYS = {"api_key", "authorization", "x-api-key"}
+
+
+def _sanitize_for_log(value):
+    if isinstance(value, dict):
+        sanitized = {}
+        for key, item in value.items():
+            if isinstance(key, str) and key.lower() in SENSITIVE_CONFIG_KEYS:
+                sanitized[key] = "***REDACTED***" if item else item
+            else:
+                sanitized[key] = _sanitize_for_log(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_for_log(item) for item in value]
+    return value
+
+
 class BaseProcess(object):
 
     def __init__(
@@ -23,7 +40,7 @@ class BaseProcess(object):
         self.timer: Timer = Timer(f'{self.name} Timer')
         self.performance_log_every = self.get_conf('performance_log_every', 0)
 
-        print(json.dumps(self.config, indent=4))
+        print(json.dumps(_sanitize_for_log(self.config), indent=4))
         
     def on_error(self, e: Exception):
         pass

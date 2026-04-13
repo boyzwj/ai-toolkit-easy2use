@@ -1,13 +1,30 @@
 import { GroupedSelectOption, SelectOption } from "@/types";
+import {
+    buildCaptionPrompt,
+    defaultCaptionPromptTemplate,
+    defaultCaptionTargetLanguage,
+} from '@/helpers/captionPrompts';
 
 type CaptionGroup = 'image' | 'music';
-type AdditionalSections = 'caption.model_name_or_path2' | 'caption.caption_prompt' | 'caption.max_res' | 'caption.max_new_tokens';
+type AdditionalSections =
+    'caption.model_name_or_path2'
+    | 'caption.caption_prompt'
+    | 'caption.max_res'
+    | 'caption.max_new_tokens'
+    | 'caption.api_concurrency'
+    | 'caption.api_base_url'
+    | 'caption.api_key'
+    | 'caption.api_protocol'
+    | 'caption.prompt_template'
+    | 'caption.target_lang';
 
 export interface CaptionOption {
     name: string;
     label: string;
     group: CaptionGroup;
     hasMultiLinePrompts?: boolean;
+    supportsQuantization?: boolean;
+    supportsLowVram?: boolean;
     defaults?: { [key: string]: any };
     additionalSections?: AdditionalSections[];
     name_or_path_options?: SelectOption[];
@@ -21,7 +38,7 @@ const extensionsImage = ['jpg', 'jpeg', 'png', 'bmp', 'webp'];
 
 const defaultExtensions = [...extensionsImage];
 
-const defaultImageCaptionPrompt = "Caption this image as if you were going to try to generate it with an image generator. Be thurough and describe everything in the image. Be decisive by stating things as they are. Do not say things like \"It appears that\" Or \"possibly\". Start out with things like \"A person on the beach\" or \"A black dragon\". No preamble. Just get to the point.";
+const defaultImageCaptionPrompt = buildCaptionPrompt(defaultCaptionPromptTemplate, defaultCaptionTargetLanguage);
 
 export const captionerTypes: CaptionOption[] = [
     {
@@ -42,6 +59,8 @@ export const captionerTypes: CaptionOption[] = [
         additionalSections: [
             'caption.model_name_or_path2',
         ],
+        supportsQuantization: true,
+        supportsLowVram: true,
     },
     {
         name: 'Qwen3VLCaptioner',
@@ -50,6 +69,8 @@ export const captionerTypes: CaptionOption[] = [
         defaults: {
             'config.process[0].caption.model_name_or_path': ['Qwen/Qwen3-VL-8B-Instruct', defaultNameOrPath],
             'config.process[0].caption.extensions': [extensionsImage, defaultExtensions],
+            'config.process[0].caption.prompt_template': [defaultCaptionPromptTemplate, undefined],
+            'config.process[0].caption.target_lang': [defaultCaptionTargetLanguage, undefined],
             'config.process[0].caption.caption_prompt': [defaultImageCaptionPrompt, undefined],
             'config.process[0].caption.max_res': [512, undefined],
             'config.process[0].caption.max_new_tokens': [128, undefined],
@@ -62,10 +83,47 @@ export const captionerTypes: CaptionOption[] = [
             { value: 'Qwen/Qwen3-VL-30B-A3B-Instruct', label: 'Qwen/Qwen3-VL-30B-A3B-Instruct' },
         ],
         additionalSections: [
+            'caption.prompt_template',
+            'caption.target_lang',
             'caption.caption_prompt',
             'caption.max_res',
             'caption.max_new_tokens',
         ],
+        supportsQuantization: true,
+        supportsLowVram: true,
+    },
+    {
+        name: 'RemoteAPICaptioner',
+        label: '自定义 API',
+        group: 'image',
+        defaults: {
+            'config.process[0].caption.model_name_or_path': ['', defaultNameOrPath],
+            'config.process[0].caption.api_base_url': ['', undefined],
+            'config.process[0].caption.api_key': ['', undefined],
+            'config.process[0].caption.api_protocol': ['openai', undefined],
+            'config.process[0].caption.extensions': [extensionsImage, defaultExtensions],
+            'config.process[0].caption.prompt_template': [defaultCaptionPromptTemplate, undefined],
+            'config.process[0].caption.target_lang': [defaultCaptionTargetLanguage, undefined],
+            'config.process[0].caption.caption_prompt': [defaultImageCaptionPrompt, undefined],
+            'config.process[0].caption.max_res': [512, undefined],
+            'config.process[0].caption.max_new_tokens': [128, undefined],
+            'config.process[0].caption.api_concurrency': [20, undefined],
+            'config.process[0].caption.quantize': [false, true],
+            'config.process[0].caption.low_vram': [false, true],
+        },
+        additionalSections: [
+            'caption.api_base_url',
+            'caption.api_key',
+            'caption.api_protocol',
+            'caption.api_concurrency',
+            'caption.prompt_template',
+            'caption.target_lang',
+            'caption.caption_prompt',
+            'caption.max_res',
+            'caption.max_new_tokens',
+        ],
+        supportsQuantization: false,
+        supportsLowVram: false,
     },
 
 ].sort((a, b) => {

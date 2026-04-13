@@ -25,7 +25,19 @@ class Qwen3VLCaptionerExtension(Extension):
         return Qwen3VLCaptioner
 
 
+class RemoteAPICaptionerExtension(Extension):
+    uid = "RemoteAPICaptioner"
+    name = "Remote API Captioner"
+
+    @classmethod
+    def get_process(cls):
+        from .RemoteAPICaptioner import RemoteAPICaptioner
+
+        return RemoteAPICaptioner
+
+
 AI_TOOLKIT_EXTENSIONS = [
     AceStepCaptionerExtension,
     Qwen3VLCaptionerExtension,
+    RemoteAPICaptionerExtension,
 ]

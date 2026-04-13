@@ -291,6 +291,10 @@ export const CreatableSelectInput = (props: CreatableSelectInputProps) => {
 
   const [isCustom, setIsCustom] = React.useState(!isInOptions && !!value);
 
+  React.useEffect(() => {
+    setIsCustom(!isInOptions && !!value);
+  }, [isInOptions, value]);
+
   // Build select options with "Custom" at the top
   const customOption: SelectOption = { value: CUSTOM_SELECT_VALUE, label: 'Custom' };
   const selectOptions = React.useMemo(() => {

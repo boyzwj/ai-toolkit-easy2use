@@ -259,6 +259,11 @@ export interface CaptionProcessConfig {
   caption: {
     model_name_or_path: string;
     model_name_or_path2?: string;
+    api_base_url?: string;
+    api_key?: string;
+    api_protocol?: 'openai' | 'anthropic';
+    prompt_template?: string;
+    target_lang?: string;
     dtype: string;
     quantize: boolean;
     qtype: string;
@@ -269,6 +274,7 @@ export interface CaptionProcessConfig {
     caption_prompt?: string;
     max_res?: number;
     max_new_tokens?: number;
+    api_concurrency?: number;
   }
 }
 
