@@ -188,3 +188,6 @@ aitk_db.db
 AI-ToolKit-E2U-portable/
 AI-ToolKit-E2U-portable.zip
 .claude
+.codex
+tmp/
+ui/prisma/database.db
