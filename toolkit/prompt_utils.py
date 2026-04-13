@@ -8,6 +8,8 @@ import random
 
 from toolkit.train_tools import get_torch_dtype
 import itertools
+from safetensors import safe_open
+from toolkit.advanced_prompt_embeds import AdvancedPromptEmbeds
 
 if TYPE_CHECKING:
     from toolkit.config_modules import SliderTargetConfig
@@ -126,7 +128,7 @@ class PromptEmbeds:
                 state_dict[f"text_embed_{i}"] = text_embed.cpu()
         else:
             state_dict["text_embed"] = pe.text_embeds.cpu()
-            
+
         if pe.pooled_embeds is not None:
             state_dict["pooled_embed"] = pe.pooled_embeds.cpu()
         if pe.attention_mask is not None:
@@ -137,7 +139,7 @@ class PromptEmbeds:
                 state_dict["attention_mask"] = pe.attention_mask.cpu()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         save_file(state_dict, path)
-    
+
     @classmethod
     def load(cls, path: str) -> 'PromptEmbeds':
         """
@@ -145,6 +147,12 @@ class PromptEmbeds:
         :param path: The path to load the prompt embeds from.
         :return: An instance of PromptEmbeds.
         """
+        # first check if it is advanced prompt embed file
+        f = safe_open(path, framework='pt')
+        metadata = f.metadata()
+        if metadata is not None and metadata.get("class_name", "") == "AdvancedPromptEmbeds":
+            return AdvancedPromptEmbeds.load(path=path)
+
         state_dict = load_file(path, device='cpu')
         text_embeds = []
         pooled_embeds = None
@@ -245,6 +253,9 @@ class EncodedPromptPair:
 
 
 def concat_prompt_embeds(prompt_embeds: list["PromptEmbeds"], padding_side: str = "right") -> PromptEmbeds:
+    # check if first item has a classmethod of concat_prompt_embeds
+    if hasattr(prompt_embeds[0].__class__, "concat_prompt_embeds"):
+        return prompt_embeds[0].__class__.concat_prompt_embeds(prompt_embeds, padding_side=padding_side)
     # --- pad text_embeds ---
     if isinstance(prompt_embeds[0].text_embeds, (list, tuple)):
         text_embeds = []
@@ -335,10 +346,12 @@ def concat_prompt_pairs(prompt_pairs: list[EncodedPromptPair]):
 
 
 def split_prompt_embeds(concatenated: PromptEmbeds, num_parts=None) -> List[PromptEmbeds]:
+    if hasattr(concatenated.__class__, "split_prompt_embeds"):
+        return concatenated.__class__.split_prompt_embeds(concatenated, num_parts=num_parts)
     if num_parts is None:
         # use batch size
         num_parts = concatenated.text_embeds.shape[0]
-        
+
     if isinstance(concatenated.text_embeds, list) or isinstance(concatenated.text_embeds, tuple):
         # split each part
         text_embeds_splits = [

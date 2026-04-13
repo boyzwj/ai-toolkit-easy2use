@@ -5,16 +5,21 @@ import { LuImageOff, LuLoader, LuBan } from 'react-icons/lu';
 import { FaChevronLeft } from 'react-icons/fa';
 import DatasetImageCard from '@/components/DatasetImageCard';
 import { Button } from '@headlessui/react';
-import AddImagesModal, { openImagesModal } from '@/components/AddImagesModal';
+import AddImagesModal, { openImagesModal, useOpenImagesModalOnDrag } from '@/components/AddImagesModal';
 import { TopBar, MainContent } from '@/components/layout';
 import { apiClient } from '@/utils/api';
-import FullscreenDropOverlay from '@/components/FullscreenDropOverlay';
+import { CaptionDatasetModal, openCaptionDatasetModal } from '@/components/CaptionDatasetModal';
+import useSettings from '@/hooks/useSettings';
+import { pathJoin } from '@/utils/basic';
+import AutoCaptionButton from '@/components/AutoCaptionButton';
 
 export default function DatasetPage({ params }: { params: { datasetName: string } }) {
   const [imgList, setImgList] = useState<{ img_path: string }[]>([]);
+  const [isAutoCaptioning, setIsAutoCaptioning] = useState(false);
   const usableParams = use(params as any) as { datasetName: string };
   const datasetName = usableParams.datasetName;
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const { settings, isSettingsLoaded } = useSettings();
 
   const refreshImageList = (dbName: string) => {
     setStatus('loading');
@@ -34,6 +39,8 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
         setStatus('error');
       });
   };
+  useOpenImagesModalOnDrag(datasetName, () => refreshImageList(datasetName));
+
   useEffect(() => {
     if (datasetName) {
       refreshImageList(datasetName);
@@ -54,27 +61,27 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
       text = '正在加载图片';
       subtitle = '请稍候，正在获取数据集图片...';
       showIt = true;
-      bgColor = 'bg-gray-50 dark:bg-gray-800/50';
-      textColor = 'text-gray-900 dark:text-gray-100';
-      iconColor = 'text-gray-500 dark:text-gray-400';
+      bgColor = 'bg-gray-800/50';
+      textColor = 'text-gray-100';
+      iconColor = 'text-gray-400';
     }
     if (status == 'error') {
       icon = <LuBan className="w-8 h-8" />;
       text = '加载图片出错';
       subtitle = '获取图片时出现问题，请尝试刷新页面。';
       showIt = true;
-      bgColor = 'bg-red-50 dark:bg-red-950/20';
-      textColor = 'text-red-900 dark:text-red-100';
-      iconColor = 'text-red-600 dark:text-red-400';
+      bgColor = 'bg-red-600/20';
+      textColor = 'text-red-100';
+      iconColor = 'text-red-400';
     }
     if (status == 'success' && imgList.length === 0) {
       icon = <LuImageOff className="w-8 h-8" />;
       text = '未找到图片';
       subtitle = '该数据集为空。点击“添加图片”开始。';
       showIt = true;
-      bgColor = 'bg-gray-50 dark:bg-gray-800/50';
-      textColor = 'text-gray-900 dark:text-gray-100';
-      iconColor = 'text-gray-500 dark:text-gray-400';
+      bgColor = 'bg-gray-800/50';
+      textColor = 'text-gray-100';
+      iconColor = 'text-gray-400';
     }
 
     if (!showIt) return null;
@@ -104,10 +111,13 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
           <h1 className="text-base sm:text-lg truncate max-w-[50vw] sm:max-w-none">数据集: {datasetName}</h1>
         </div>
         <div className="flex-1"></div>
-        <div>
-          {/* 添加图片按钮在移动端缩小尺寸并保持不换行 */}
+        <div className="flex items-center gap-2">
+          <AutoCaptionButton
+            datasetPath={`${pathJoin(settings.DATASETS_FOLDER, datasetName)}`}
+            setIsAutoCaptioning={setIsAutoCaptioning}
+          />
           <Button
-            className="text-gray-200 bg-slate-600 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
+            className="text-white bg-slate-600 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
             onClick={() => openImagesModal(datasetName, () => refreshImageList(datasetName))}
           >
             添加图片
@@ -122,6 +132,7 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
               <DatasetImageCard
                 key={img.img_path}
                 alt="image"
+                isAutoCaptioning={isAutoCaptioning}
                 imageUrl={img.img_path}
                 onDelete={() => refreshImageList(datasetName)}
               />
@@ -130,10 +141,7 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
         )}
       </MainContent>
       <AddImagesModal />
-      <FullscreenDropOverlay
-        datasetName={datasetName}
-        onComplete={() => refreshImageList(datasetName)}
-      />
+      <CaptionDatasetModal />
     </>
   );
 }

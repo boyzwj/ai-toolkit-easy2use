@@ -92,7 +92,7 @@ const GpuMonitor: React.FC = () => {
       );
     }
 
-    if (!gpuData.hasNvidiaSmi) {
+    if (!gpuData.hasNvidiaSmi && !gpuData.isMac) {
       return (
         <div className="bg-yellow-900 border border-yellow-700 text-yellow-300 px-4 py-3 rounded relative" role="alert">
           <strong className="font-bold">未检测到 NVIDIA GPU！</strong>

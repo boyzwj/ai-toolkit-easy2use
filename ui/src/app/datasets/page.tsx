@@ -119,7 +119,7 @@ export default function Datasets() {
         <div className="flex-1"></div>
         <div>
           <Button
-            className="text-gray-200 bg-slate-600 px-4 py-2 rounded-md hover:bg-slate-500 transition-colors"
+            className="text-white bg-slate-600 px-3 py-1 rounded-md hover:bg-slate-500 transition-colors"
             onClick={() => openNewDatasetModal()}
           >
             新建数据集
