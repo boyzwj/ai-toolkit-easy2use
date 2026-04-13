@@ -90,6 +90,33 @@ pip install -r dgx_requirements.txt
 
 UI 为基于 Next.js 的 Web 应用。训练任务本身不依赖 UI 持续前台运行，UI 主要用于创建、启动、停止和监控任务。
 
+### 旧版本升级到新版（重要）
+
+如果你是从旧版本直接 `git pull` 到新版本，而不是全新安装，请务必在启动 UI 前同步 Prisma Client 和本地数据库结构。
+
+这是因为上游更新会不定期修改 [`ui/prisma/schema.prisma`](ui/prisma/schema.prisma)。如果代码已经更新，但还没有重新生成 Prisma Client / 执行 `db push`，就可能出现这类问题：
+
+- 页面加载时报 `Application error` 或 client-side exception
+- 创建 / 保存任务失败
+- 接口报 Prisma 字段不存在，例如 `Unknown argument job_ref`
+
+推荐升级步骤：
+
+```bash
+cd ui
+npm install
+npm run update_db
+npm run build
+```
+
+其中：
+
+- `npm run update_db` 会执行 `npx prisma generate && npx prisma db push`
+- `prisma generate` 用于重建 Prisma Client
+- `prisma db push` 用于把本地 SQLite 数据库结构同步到最新 schema
+
+如果你当前已经在运行 UI，请先停止正在运行的 `node` / `next` 进程，再执行上面的命令；否则在 Windows 下可能会遇到 Prisma DLL 被占用、无法更新的问题。
+
 ### 开发模式
 
 ```bash
@@ -165,6 +192,8 @@ $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
   - 优先确认 Python、CUDA、驱动版本匹配；必要时建议使用 WSL 获得更稳定的依赖环境。
 - UI 无法访问或接口报错？
   - 请确认 Node.js 版本（>=20）、依赖已安装完成，并检查 `npm run dev` / `npm run build_and_start` 是否正常启动。
+- 旧版本升级后页面报错、数据集页打不开、保存任务失败？
+  - 很多时候是 Prisma Client 或数据库结构没有同步。请进入 `ui/` 目录后执行：`npm install && npm run update_db && npm run build`。
 - 想启用 Hugging Face 高速下载？
   - 可在启动前设置 `HF_HUB_ENABLE_HF_TRANSFER=1`。
 - 音频 / 视频数据集读取失败？

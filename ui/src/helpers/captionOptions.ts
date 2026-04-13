@@ -74,12 +74,13 @@ export const captionerTypes: CaptionOption[] = [
 }) as any;
 
 export const groupedCaptionerTypes: GroupedSelectOption[] = captionerTypes.reduce((acc, arch) => {
-    const group = acc.find(g => g.label === arch.group);
+    const groupLabel = arch.group === 'image' ? '图片' : '音频';
+    const group = acc.find(g => g.label === groupLabel);
     if (group) {
         group.options.push({ value: arch.name, label: arch.label });
     } else {
         acc.push({
-            label: arch.group,
+            label: groupLabel,
             options: [{ value: arch.name, label: arch.label }],
         });
     }
@@ -87,8 +88,8 @@ export const groupedCaptionerTypes: GroupedSelectOption[] = captionerTypes.reduc
 }, [] as GroupedSelectOption[]);
 
 export const quantizationOptions: SelectOption[] = [
-    { value: '', label: '- NONE -' },
-    { value: 'float8', label: 'float8 (default)' },
+    { value: '', label: '- 不量化 -' },
+    { value: 'float8', label: 'float8（默认）' },
     { value: 'uint7', label: '7 bit' },
     { value: 'uint6', label: '6 bit' },
     { value: 'uint5', label: '5 bit' },
@@ -99,13 +100,13 @@ export const quantizationOptions: SelectOption[] = [
 
 export const maxResOptions: SelectOption[] = [
     { value: '256', label: '256' },
-    { value: '512', label: '512 (default)' },
+    { value: '512', label: '512（默认）' },
     { value: '768', label: '768' },
     { value: '1024', label: '1024' },
 ];
 export const maxNewTokensOptions: SelectOption[] = [
     { value: '64', label: '64' },
-    { value: '128', label: '128 (default)' },
+    { value: '128', label: '128（默认）' },
     { value: '256', label: '256' },
     { value: '512', label: '512' },
     { value: '1024', label: '1024' },

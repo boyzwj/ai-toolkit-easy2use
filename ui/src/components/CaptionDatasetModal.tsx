@@ -78,7 +78,7 @@ export const CaptionDatasetModal: React.FC = () => {
   const saveJob = async () => {
     if (isSavingRef.current) return;
     if (!modalInfo?.datasetPath) {
-      alert('Dataset path is missing. Please try again.');
+      alert('数据集路径缺失，请重试。');
       return;
     }
     isSavingRef.current = true;
@@ -102,9 +102,9 @@ export const CaptionDatasetModal: React.FC = () => {
       })
       .catch(error => {
         if (error.response?.status === 409) {
-          alert('A caption job for this dataset already exists. Please check your jobs list.');
+          alert('该数据集的打标任务已存在，请到任务列表中查看。');
         } else {
-          alert('Failed to save job. Please try again.');
+          alert('保存任务失败，请重试。');
         }
         console.log('Error saving training:', error);
         isSavingRef.current = false;
@@ -112,7 +112,7 @@ export const CaptionDatasetModal: React.FC = () => {
   };
 
   return (
-    <Modal isOpen={open} onClose={handleClose} title="Caption Dataset" size="lg">
+    <Modal isOpen={open} onClose={handleClose} title="数据集打标" size="lg">
       <div className="space-y-4 text-gray-200">
         <form
           onSubmit={e => {
@@ -124,7 +124,7 @@ export const CaptionDatasetModal: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
                 <SelectInput
-                  label="Captioner Type"
+                  label="打标器类型"
                   value={jobConfig.config.process[0].type}
                   onChange={value => {
                     handleCaptionerTypeChange(jobConfig.config.process[0].type, value, jobConfig, setJobConfig);
@@ -135,7 +135,7 @@ export const CaptionDatasetModal: React.FC = () => {
               {showGPUSelect && (
                 <div>
                   <SelectInput
-                    label="GPU ID"
+                    label="GPU 编号"
                     value={`${gpuIDs}`}
                     onChange={value => setGpuIDs(value)}
                     options={gpuList.map((gpu: any) => ({ value: `${gpu.index}`, label: `GPU #${gpu.index}` }))}
@@ -145,7 +145,7 @@ export const CaptionDatasetModal: React.FC = () => {
             </div>
             <div className="mt-4">
               <CreatableSelectInput
-                label="Name or Path"
+                label="模型名称或路径"
                 value={jobConfig.config.process[0].caption.model_name_or_path}
                 docKey="config.process[0].caption.model_name_or_path"
                 onChange={(value: string | null) => {
@@ -162,7 +162,7 @@ export const CaptionDatasetModal: React.FC = () => {
             {selectedCaptionOption?.additionalSections?.includes('caption.model_name_or_path2') && (
               <div className="mt-4">
                 <CreatableSelectInput
-                  label="Name or Path 2"
+                  label="模型名称或路径 2"
                   value={jobConfig.config.process[0].caption.model_name_or_path2 || ''}
                   onChange={(value: string | null) => {
                     if (value?.trim() === '') {
@@ -178,7 +178,7 @@ export const CaptionDatasetModal: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
                 <SelectInput
-                  label="Quantize"
+                  label="量化"
                   value={jobConfig.config.process[0].caption.quantize ? jobConfig.config.process[0].caption.qtype : ''}
                   onChange={value => {
                     if (value === '') {
@@ -194,7 +194,7 @@ export const CaptionDatasetModal: React.FC = () => {
                 {selectedCaptionOption?.additionalSections?.includes('caption.max_res') && (
                   <div className="mt-4">
                     <SelectInput
-                      label="Max Resolution"
+                      label="最大分辨率"
                       value={`${jobConfig.config.process[0].caption.max_res || ''}`}
                       onChange={value => {
                         const intVal = parseInt(value);
@@ -209,7 +209,7 @@ export const CaptionDatasetModal: React.FC = () => {
                 {selectedCaptionOption?.additionalSections?.includes('caption.max_new_tokens') && (
                   <div className="mt-4">
                     <SelectInput
-                      label="Max New Tokens"
+                      label="最大新 Token 数"
                       value={`${jobConfig.config.process[0].caption.max_new_tokens || ''}`}
                       onChange={value => {
                         const intVal = parseInt(value);
@@ -223,14 +223,14 @@ export const CaptionDatasetModal: React.FC = () => {
                 )}
               </div>
               <div>
-                <FormGroup label="Options">
+                <FormGroup label="选项">
                   <Checkbox
-                    label="Low VRAM"
+                    label="低显存"
                     checked={jobConfig.config.process[0].caption.low_vram}
                     onChange={value => setJobConfig(value, 'config.process[0].caption.low_vram')}
                   />
                   <Checkbox
-                    label="Recaption"
+                    label="重新打标"
                     checked={jobConfig.config.process[0].caption.recaption}
                     onChange={value => setJobConfig(value, 'config.process[0].caption.recaption')}
                   />
@@ -240,12 +240,12 @@ export const CaptionDatasetModal: React.FC = () => {
             {selectedCaptionOption?.additionalSections?.includes('caption.caption_prompt') && (
               <div className="mt-4">
                 <TextAreaInput
-                  label="Caption Prompt"
+                  label="打标提示词"
                   value={jobConfig.config.process[0].caption.caption_prompt || ''}
                   onChange={value => {
                     setJobConfig(value, 'config.process[0].caption.caption_prompt');
                   }}
-                  placeholder="Enter caption prompt"
+                  placeholder="输入打标提示词"
                 />
               </div>
             )}
@@ -257,13 +257,13 @@ export const CaptionDatasetModal: React.FC = () => {
               className="rounded-md bg-gray-700 px-4 py-2 text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
               onClick={handleClose}
             >
-              Cancel
+              取消
             </button>
             <button
               type="submit"
               className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              Add to Queue
+              加入队列
             </button>
           </div>
         </form>

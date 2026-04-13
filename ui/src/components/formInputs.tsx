@@ -14,6 +14,22 @@ const labelClasses = 'block text-xs mb-1 mt-2 text-gray-300';
 const inputClasses =
   'w-full text-sm px-3 py-1 bg-gray-800 border border-gray-700 rounded-sm focus:ring-2 focus:ring-gray-600 focus:border-transparent text-gray-100';
 
+const sharedSelectStyles = {
+  menuPortal: (base: any) => ({ ...base, zIndex: 9999 }),
+  menu: (base: any) => ({ ...base, zIndex: 9999 }),
+  option: (base: any, state: any) => ({
+    ...base,
+    color: state.isSelected ? '#ffffff' : '#111827',
+    backgroundColor: state.isSelected ? '#2563eb' : state.isFocused ? '#dbeafe' : '#ffffff',
+  }),
+  groupHeading: (base: any) => ({
+    ...base,
+    color: '#4b5563',
+    fontWeight: 600,
+    backgroundColor: '#ffffff',
+  }),
+};
+
 export interface InputProps {
   label?: string;
   docKey?: string | null;
@@ -236,10 +252,7 @@ export const SelectInput = (props: SelectInputProps) => {
         // 使用 Portal 将下拉菜单渲染到 body，避免被父容器 overflow 截断
         menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
         menuPosition="fixed"
-        styles={{
-          menuPortal: base => ({ ...base, zIndex: 9999 }),
-          menu: base => ({ ...base, zIndex: 9999 }),
-        }}
+        styles={sharedSelectStyles}
         onChange={selected => {
           if (selected) {
             onChange((selected as { value: string }).value);
@@ -321,6 +334,9 @@ export const CreatableSelectInput = (props: CreatableSelectInputProps) => {
             isDisabled={props.disabled}
             className="aitk-react-select-container"
             classNamePrefix="aitk-react-select"
+            menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
+            menuPosition="fixed"
+            styles={sharedSelectStyles}
             formatOptionLabel={(option: unknown) => {
               const opt = option as SelectOption;
               return opt.value === CUSTOM_SELECT_VALUE ? (

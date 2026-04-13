@@ -3,6 +3,8 @@ import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import { createRequire } from 'module';
 import os from 'os';
+import fs from 'fs';
+import path from 'path';
 
 const execAsync = promisify(exec);
 
@@ -137,9 +139,9 @@ export async function GET() {
     }
 
     // Check if nvidia-smi is available
-    const hasNvidiaSmi = await checkNvidiaSmi(isWindows);
+    const nvidiaSmiCommand = await resolveNvidiaSmiCommand(isWindows);
 
-    if (!hasNvidiaSmi) {
+    if (!nvidiaSmiCommand) {
       return NextResponse.json({
         hasNvidiaSmi: false,
         isMac: false,
@@ -149,7 +151,7 @@ export async function GET() {
     }
 
     // Get GPU stats
-    const gpuStats = await getGpuStats(isWindows);
+    const gpuStats = await getGpuStats(nvidiaSmiCommand);
 
     return NextResponse.json({
       hasNvidiaSmi: true,
@@ -169,27 +171,66 @@ export async function GET() {
   }
 }
 
-async function checkNvidiaSmi(isWindows: boolean): Promise<boolean> {
+async function resolveNvidiaSmiCommand(isWindows: boolean): Promise<string | null> {
   try {
     if (isWindows) {
-      // Check if nvidia-smi is available on Windows
-      // It's typically located in C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe
-      // but we'll just try to run it directly as it may be in PATH
-      await execAsync('nvidia-smi -L');
+      const windowsCandidates = [
+        'nvidia-smi.exe',
+        path.win32.join(process.env.windir || 'C:\\Windows', 'System32', 'nvidia-smi.exe'),
+        'C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe',
+      ];
+
+      for (const candidate of windowsCandidates) {
+        const existsOnDisk =
+          candidate.includes('\\') || candidate.includes('/')
+            ? fs.existsSync(candidate)
+            : true;
+
+        if (!existsOnDisk) {
+          continue;
+        }
+
+        try {
+          await execAsync(`"${candidate}" -L`, {
+            env: { ...process.env, CUDA_DEVICE_ORDER: 'PCI_BUS_ID' },
+          });
+          return candidate;
+        } catch {
+          // Try next candidate.
+        }
+      }
+
+      try {
+        const { stdout } = await execAsync('where nvidia-smi', {
+          env: { ...process.env, CUDA_DEVICE_ORDER: 'PCI_BUS_ID' },
+        });
+        const resolved = stdout
+          .split(/\r?\n/)
+          .map(line => line.trim())
+          .find(Boolean);
+        if (resolved) {
+          await execAsync(`"${resolved}" -L`, {
+            env: { ...process.env, CUDA_DEVICE_ORDER: 'PCI_BUS_ID' },
+          });
+          return resolved;
+        }
+      } catch {
+        // Fall through to null below.
+      }
     } else {
-      // Linux/macOS check
       await execAsync('which nvidia-smi');
+      return 'nvidia-smi';
     }
-    return true;
-  } catch (error) {
-    return false;
+    return null;
+  } catch {
+    return null;
   }
 }
 
-async function getGpuStats(isWindows: boolean) {
+async function getGpuStats(nvidiaSmiCommand: string) {
   // Command is the same for both platforms, but the path might be different
   const command =
-    'nvidia-smi --query-gpu=index,name,driver_version,temperature.gpu,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used,power.draw,power.limit,clocks.current.graphics,clocks.current.memory,fan.speed --format=csv,noheader,nounits';
+    `"${nvidiaSmiCommand}" --query-gpu=index,name,driver_version,temperature.gpu,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used,power.draw,power.limit,clocks.current.graphics,clocks.current.memory,fan.speed --format=csv,noheader,nounits`;
 
   // Execute command
   const { stdout } = await execAsync(command, {
