@@ -1,6 +1,6 @@
 # 更易用的 AI Toolkit（中文 README）
 
-本项目是 AI Toolkit 的中文与易用性优化版本（ai-toolkit-easy2use）。在保留原功能的基础上，聚焦「更易安装、更易上手、更易维护」。本 README 全文为中文，并对安装、运行与 UI 使用进行汉化说明。
+本项目是 AI Toolkit 的中文与易用性优化版本（`ai-toolkit-easy2use`）。在保留原功能的基础上，聚焦「更易安装、更易上手、更易维护」。本 README 全文为中文，并对安装、运行与 UI 使用进行汉化说明。
 
 > 原项目作者：Ostris；本仓库维护：DocWorkBox。
 
@@ -9,16 +9,35 @@
 ## 项目简介
 
 - 面向扩散模型（Diffusion Models）的训练与推理一体化工具。
-- 支持常见的图像与视频模型，适配消费级硬件。
+- 支持图像、视频、音频模型，以及编辑 / instruction 类模型。
 - 提供命令行（CLI）与 Web 用户界面（UI），上手门槛低同时功能完备。
+- 本仓库持续跟进上游更新，同时保留中文文档、中文 UI 和更贴近中文用户的使用体验。
+
+## 当前支持概览
+
+- 图像：FLUX.1 / FLUX.2 / FLUX.2 Klein / Qwen-Image / Qwen-Image-2512 / Z-Image / SDXL / SD1.5 等
+- 编辑：Qwen-Image-Edit / Qwen-Image-Edit-2509 / Qwen-Image-Edit-2511 / HiDream E1 / FireRed-Image-Edit-1.1 预设
+- 视频：Wan 2.x / LTX-2 / LTX-2.3 等
+- 音频：ACE-Step 1.5 / ACE-Step 1.5 XL
 
 ## 环境要求
 
-- Python ≥ 3.10
-- Git（用于拉取仓库）
-- NVIDIA GPU（显存需满足你的训练或推理需求）
-- Python 虚拟环境（建议）
-- Node.js ≥ 20（用于运行 Web UI）
+- Python >= 3.10（推荐 3.12）
+- Git
+- Python 虚拟环境
+- Node.js >= 20（运行 Web UI）
+- NVIDIA GPU（按训练任务准备足够显存）
+
+### Mac Apple Silicon
+
+上游已加入 Apple Silicon 的实验性支持。若你在 macOS 上使用，可直接尝试：
+
+```bash
+chmod +x run_mac.zsh
+./run_mac.zsh
+```
+
+如果你在 Mac 上遇到兼容性问题，欢迎优先参考上游最新 issue 或在本仓库反馈。
 
 ## 安装（Linux / Windows）
 
@@ -45,9 +64,9 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-### 3）安装 PyTorch（示例，CUDA 12.8 对应版本）
+### 3）安装 PyTorch（示例：CUDA 12.8）
 
-根据你的 CUDA / 显卡环境调整版本。以下为参考示例：
+请根据你的 CUDA / 驱动环境调整版本。以下为当前仓库推荐示例：
 
 ```bash
 pip install --no-cache-dir torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cu128
@@ -59,17 +78,19 @@ pip install --no-cache-dir torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --
 pip install -r requirements.txt
 ```
 
+### 5）DGX OS
+
+DGX OS 设备请参考仓库内的 DGX 说明，并使用：
+
+```bash
+pip install -r dgx_requirements.txt
+```
+
 ## 运行 UI（中文界面）
 
-### 环境要求
-
-- Node.js ≥ 20
-
-UI 为基于 Next.js 的 Web 应用。UI 无需持续运行即可执行训练任务，仅在启动/停止/监控任务时需要使用。
+UI 为基于 Next.js 的 Web 应用。训练任务本身不依赖 UI 持续前台运行，UI 主要用于创建、启动、停止和监控任务。
 
 ### 开发模式
-
-开发模式运行在 `http://localhost:3000`：
 
 ```bash
 cd ui
@@ -77,27 +98,47 @@ npm install
 npm run dev
 ```
 
-打开浏览器访问：
+访问：
 
-- `http://localhost:3000/`（首页）
-- `http://localhost:3000/dashboard`（仪表盘）
-- `http://localhost:3000/jobs/new`（新建任务）
+- `http://localhost:3000/`
+- `http://localhost:3000/dashboard`
+- `http://localhost:3000/jobs/new`
 
-### 生产环境
-
-生产环境运行在端口 `8675`。以下命令将安装/更新 UI 及其依赖并启动 UI：
+### 生产模式
 
 ```bash
 cd ui
 npm run build_and_start
 ```
 
-启动后可通过以下地址访问：
+默认端口：
 
-- `http://localhost:8675`（本地访问）
-- `http://<your-ip>:8675`（服务器部署时的远程访问）
+- `http://localhost:8675`
+- `http://<your-ip>:8675`
 
-> **注意**：UI 无需持续运行即可执行训练任务。UI 仅用于启动、停止和监控任务。
+### 安全建议
+
+如果你把 UI 暴露在公网，建议设置认证令牌：
+
+```bash
+# Linux
+AI_TOOLKIT_AUTH=your_token npm run build_and_start
+
+# Windows PowerShell
+$env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
+```
+
+## 近期已并入的重要上游能力
+
+- Qwen Image 原生增加 `1328` 分辨率支持
+- Flux2 / Flux2 Klein 低显存加载、量化顺序和控制图编码修复
+- `compile: true` 真正生效，并修复 compile 时序
+- 数据集页支持 duplicate dataset、改进拖拽 / 上传模型、隐藏文件过滤
+- 数据集自动 caption、音频数据集 captioning、音频样本下载
+- ACE-Step 1.5 / XL 音频模型支持
+- `flac` / `ogg` 支持
+- Light Mode 支持
+- `AdvancedPromptEmbeds` 引入，增强 prompt/embed 兼容能力
 
 ## 中文版 UI 截图
 
@@ -109,19 +150,6 @@ npm run build_and_start
 ![手机端：适配器页面（1）](ui/public/screenshots/adapter-UI0.png)
 ![手机端：适配器页面（2）](ui/public/screenshots/adapter-UI1.png)
 
-## 常见问题（FAQ）
-
-- 显存不足如何处理？
-  - 训练大型模型时，如遇显存限制，可在配置中开启低显存选项（例如 `low_vram: true`），或在 CPU 上量化部分模块以降低显存占用。
-- Windows 环境安装遇到困难？
-  - 建议优先确认 Python、CUDA 与驱动版本匹配；也可以考虑使用 WSL（Windows Subsystem for Linux）以获得更稳定的依赖环境。
-- UI 无法访问或接口报错？
-  - 请检查 Node.js 版本（≥20）、依赖是否安装完成（`npm install`）、以及开发服务器是否正常运行（`npm run dev`）。
-- 构建时提示 `Module not found: Can't resolve 'recharts'`？
-  - 这是新版本引入的图表库，请在 `ui` 目录下运行 `npm install recharts` 进行安装。
-- 需要启用 Hugging Face 高速下载？
-  - 可以在启动前设置环境变量 `HF_HUB_ENABLE_HF_TRANSFER=1`。
-
 ## FireRed-Image-Edit-1.1 预设说明
 
 - 训练 UI 已新增 `FireRed-Image-Edit-1.1` 预设，适用于基于该模型的 LoRA 训练起步配置。
@@ -129,22 +157,33 @@ npm run build_and_start
 - 这是一份 ai-toolkit 风格预设，不是 FireRed 原仓 `train_lora.sh` 的逐项复刻；未直接映射的 FireRed 专属训练参数继续沿用 ai-toolkit 现有机制。
 - 推荐优先从示例配置 `config/examples/train_lora_firered_image_edit_1_1_32gb.yaml` 启动，再按你的显存和数据集情况微调。
 
-## 致谢与说明
+## 常见问题（FAQ）
 
-- 本仓库以更易用为目标进行中文化与体验优化，基于原 AI Toolkit 项目实现。
-- 如需反馈问题或提交改进，欢迎在本仓库的 Issue 中留言。
-
----
+- 显存不足如何处理？
+  - 训练大型模型时，如遇显存限制，可在配置中开启低显存选项（如 `low_vram: true`），或对部分模块量化 / CPU 卸载。
+- Windows 安装遇到困难？
+  - 优先确认 Python、CUDA、驱动版本匹配；必要时建议使用 WSL 获得更稳定的依赖环境。
+- UI 无法访问或接口报错？
+  - 请确认 Node.js 版本（>=20）、依赖已安装完成，并检查 `npm run dev` / `npm run build_and_start` 是否正常启动。
+- 想启用 Hugging Face 高速下载？
+  - 可在启动前设置 `HF_HUB_ENABLE_HF_TRANSFER=1`。
+- 音频 / 视频数据集读取失败？
+  - 请检查 `ffmpeg`、`torchaudio` 与容器格式支持，必要时重新安装依赖并确认系统里可用的解码后端。
 
 ## 目录指南（简要）
 
-- `config/`：训练或推理相关配置示例与模板。
-- `ui/`：Next.js 中文 UI 源码。
-- `requirements.txt`：Python 依赖列表。
-- 其他训练脚本、适配器与模型相关工具按模块分类存放。
+- `config/`：训练或推理配置示例
+- `ui/`：Next.js 中文 UI 源码
+- `docs/docker/`：本仓库额外整理的 Docker 说明
+- `requirements.txt` / `requirements_base.txt`：Python 依赖
+- `dgx_requirements.txt`：DGX OS 专用依赖
 
----
+## 致谢与说明
+
+- 本仓库以更易用为目标进行中文化与体验优化，基于原 AI Toolkit 项目实现。
+- 本仓库欢迎 issue、bug report 和改进建议。
+- 自动化生成的 PR 请至少补充清晰的人类说明与验证结果，否则不建议直接合并。
 
 ## 许可证
 
-本仓库遵循原项目的许可证政策（如有变更将于此处更新）。请在商用或分发前确认模型及数据集的独立许可证要求。
+本仓库遵循原项目的许可证政策。请在商用或分发前，额外确认模型、数据集和第三方依赖各自的许可证要求。

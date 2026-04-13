@@ -142,7 +142,7 @@ class CaptionMixin:
             # see if prompt file exists
             path_no_ext = os.path.splitext(img_path)[0]
             prompt_path = path_no_ext + ext
-                
+
         # allow folders to have a default prompt
         default_prompt_path = os.path.join(os.path.dirname(img_path), 'default.txt')
         default_prompt_path_with_ext = os.path.join(os.path.dirname(img_path), 'default' + ext)
@@ -231,6 +231,12 @@ class BucketsMixin:
         # for file_item in enumerate(file_list):
         for idx, file_item in enumerate(file_list):
             file_item: 'FileItemDTO' = file_item
+            if self.is_audio_model:
+                bucket_key = f"{file_item.width}ms"
+                if bucket_key not in self.buckets:
+                    self.buckets[bucket_key] = Bucket(file_item.width, 1)
+                self.buckets[bucket_key].file_list_idx.append(idx)
+                continue
             width = int(file_item.width * file_item.dataset_config.scale)
             height = int(file_item.height * file_item.dataset_config.scale)
 
@@ -361,7 +367,7 @@ class CaptionProcessingDTOMixin:
                     prompt = clean_caption(prompt)
                     if short_caption is not None:
                         short_caption = clean_caption(short_caption)
-                    
+
                     if prompt.strip() == '' and self.dataset_config.default_caption is not None:
                         prompt = self.dataset_config.default_caption
             else:
@@ -387,11 +393,11 @@ class CaptionProcessingDTOMixin:
     ):
         if trigger is None and self.trigger_word is not None:
             trigger = self.trigger_word
-        
+
         if trigger is not None and not self.is_reg:
             # add if not present if not regularization
             add_if_not_present = True
-            
+
         if short_caption:
             raw_caption = self.raw_caption_short
         else:
@@ -465,6 +471,27 @@ class CaptionProcessingDTOMixin:
             pass
         return caption
 
+class AudioProcessingDTOMixin:
+    def load_and_process_audio(self: 'FileItemDTO'):
+        # Default to "no audio" unless we successfully extract it
+        self.audio_data = None
+        self.audio_tensor = None
+        self.tensor = None
+        try:
+            import torchaudio
+
+            waveform, sample_rate = torchaudio.load(self.path)  # [channels, samples]
+            waveform = waveform_to_stereo(waveform)  # Convert to stereo if not already
+            if sample_rate != self.sample_rate:
+                waveform = torchaudio.functional.resample(waveform, sample_rate, self.sample_rate)
+            self.tensor = waveform
+            self.audio_tensor = waveform
+            self.audio_data = {"waveform": waveform, "sample_rate": int(self.sample_rate)}
+
+        except Exception as e:
+            # if issue with libtorchcodec "Could not load libtorchcodec"
+            raise Exception(f"** WARNING ** - Error Processing audio for {self.path}. Error: {e}")
+
 
 class ImageProcessingDTOMixin:
     def load_and_process_video(
@@ -472,56 +499,56 @@ class ImageProcessingDTOMixin:
         transform: Union[None, transforms.Compose],
         only_load_latents=False
     ):
-        
+
         if self.augments is not None and len(self.augments) > 0:
             raise Exception('Augments not supported for videos')
-            
+
         if self.has_augmentations:
             raise Exception('Augmentations not supported for videos')
-        
+
         if not self.dataset_config.buckets:
             raise Exception('Buckets required for video processing')
-        
+
         do_audio = self.dataset_config.do_audio
-        
+
         try:
             # Use OpenCV to capture video frames
             cap = cv2.VideoCapture(self.path)
-            
+
             if not cap.isOpened():
                 raise Exception(f"Failed to open video file: {self.path}")
-            
+
             # Get video properties
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             video_fps = cap.get(cv2.CAP_PROP_FPS)
-            
+
             # Calculate the max valid frame index (accounting for zero-indexing)
             max_frame_index = total_frames - 1
-            
+
             # Only log video properties if in debug mode
             if hasattr(self.dataset_config, 'debug') and self.dataset_config.debug:
                 print_acc(f"Video properties: {self.path}")
                 print_acc(f"  Total frames: {total_frames}")
                 print_acc(f"  Max valid frame index: {max_frame_index}")
                 print_acc(f"  FPS: {video_fps}")
-            
+
             frames_to_extract = []
-            
+
             if self.dataset_config.auto_frame_count:
                 # allow for any length video here but make sure it is temporally compressable.
                 vid_length_seconds = total_frames / video_fps
-                
+
                 desired_num_frames = int(vid_length_seconds * self.dataset_config.fps)
-                
+
                 # make sure it is divisible by temporal_compression
                 desired_num_frames = desired_num_frames // self.temporal_compression * self.temporal_compression
-                
+
                 # TODO, all models currently add a key frame, but future models may not, update here if this changes.
                 desired_num_frames += 1  # add one for the key frame that is always added
-                
+
                 self.num_frames = desired_num_frames
-                
-            
+
+
             # Always stretch/shrink to the requested number of frames if needed
             if self.dataset_config.shrink_video_to_frames or total_frames < self.num_frames:
                 # Distribute frames evenly across the entire video
@@ -531,10 +558,10 @@ class ImageProcessingDTOMixin:
                 # Calculate frame interval based on FPS ratio
                 fps_ratio = video_fps / self.dataset_config.fps
                 frame_interval = max(1, int(round(fps_ratio)))
-                
+
                 # Calculate max consecutive frames we can extract at desired FPS
                 max_consecutive_frames = (total_frames // frame_interval)
-                
+
                 if max_consecutive_frames < self.num_frames:
                     # Not enough frames at desired FPS, so stretch instead
                     interval = max_frame_index / (self.num_frames - 1) if self.num_frames > 1 else 0
@@ -543,39 +570,39 @@ class ImageProcessingDTOMixin:
                     # Calculate max start frame to ensure we can get all num_frames
                     max_start_frame = max_frame_index - ((self.num_frames - 1) * frame_interval)
                     start_frame = random.randint(0, max(0, max_start_frame))
-                    
+
                     # Generate list of frames to extract
                     frames_to_extract = [start_frame + (i * frame_interval) for i in range(self.num_frames)]
-                    
+
             # Final safety check - ensure no frame exceeds max valid index
             frames_to_extract = [min(frame_idx, max_frame_index) for frame_idx in frames_to_extract]
-            
+
             # Only log frames to extract if in debug mode
             if hasattr(self.dataset_config, 'debug') and self.dataset_config.debug:
                 print_acc(f"  Frames to extract: {frames_to_extract}")
-            
+
             # Extract frames
             frames = []
             for frame_idx in frames_to_extract:
                 # Safety check - ensure frame_idx is within bounds (silently fix)
                 if frame_idx > max_frame_index:
                     frame_idx = max_frame_index
-                
+
                 # Set frame position
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-                
+
                 # Silently verify position was set correctly (no warnings unless debug mode)
                 if hasattr(self.dataset_config, 'debug') and self.dataset_config.debug:
                     actual_pos = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
                     if actual_pos != frame_idx:
                         print_acc(f"Warning: Failed to set exact frame position. Requested: {frame_idx}, Actual: {actual_pos}")
-                
+
                 ret, frame = cap.read()
                 if not ret:
                     # Try to provide more detailed error information
                     actual_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
                     frame_pos_info = f"Requested frame: {frame_idx}, Actual frame position: {actual_frame}"
-                    
+
                     # Try to read the next available frame as a fallback
                     fallback_success = False
                     for fallback_offset in [1, -1, 5, -5, 10, -10]:
@@ -593,21 +620,21 @@ class ImageProcessingDTOMixin:
                         # No fallback worked, raise a more detailed exception
                         video_info = f"Video: {self.path}, Total frames: {total_frames}, FPS: {video_fps}"
                         raise Exception(f"Failed to read frame {frame_idx} from video. {frame_pos_info}. {video_info}")
-                
+
                 # Convert BGR to RGB
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                
+
                 # Convert to PIL Image
                 img = Image.fromarray(frame)
-                
+
                 # Apply the same processing as for single images
                 img = img.convert('RGB')
-                
+
                 if self.flip_x:
                     img = img.transpose(Image.FLIP_LEFT_RIGHT)
                 if self.flip_y:
                     img = img.transpose(Image.FLIP_TOP_BOTTOM)
-                
+
                 # Apply bucketing
                 img = img.resize((self.scale_to_width, self.scale_to_height), Image.BICUBIC)
                 img = img.crop((
@@ -616,16 +643,16 @@ class ImageProcessingDTOMixin:
                     self.crop_x + self.crop_width,
                     self.crop_y + self.crop_height
                 ))
-                
+
                 # Apply transform if provided
                 if transform:
                     img = transform(img)
-                
+
                 frames.append(img)
-            
+
             # Release the video capture
             cap.release()
-            
+
             # Stack frames into tensor [frames, channels, height, width]
             self.tensor = torch.stack(frames)
 
@@ -662,9 +689,9 @@ class ImageProcessingDTOMixin:
                         target_duration = source_duration
 
                     waveform, sample_rate = torchaudio.load(self.path)  # [channels, samples]
-                    
+
                     waveform = waveform_to_stereo(waveform)  # Convert to stereo if not already
-                    
+
                     if self.dataset_config.audio_normalize:
                         peak = waveform.abs().amax()  # global peak across channels
                         eps = 1e-9
@@ -705,15 +732,15 @@ class ImageProcessingDTOMixin:
                 except Exception as e:
                     # if issue with libtorchcodec "Could not load libtorchcodec"
                     raise Exception(f"** WARNING ** - Error Processing audio for {self.path}. Error: {e}")
-            
+
             # Only log success in debug mode
             if hasattr(self.dataset_config, 'debug') and self.dataset_config.debug:
                 print_acc(f"Successfully loaded video with {len(frames)} frames: {self.path}")
-        
+
         except Exception as e:
             # Print full traceback
             traceback.print_exc()
-            
+
             # Provide more context about the error
             error_msg = str(e)
             try:
@@ -722,34 +749,34 @@ class ImageProcessingDTOMixin:
                     cap_status = "Opened" if cap.isOpened() else "Closed"
                     current_pos = int(cap.get(cv2.CAP_PROP_POS_FRAMES)) if cap.isOpened() else "Unknown"
                     reported_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if cap.isOpened() else "Unknown"
-                    
+
                     print_acc(f"Video details when error occurred:")
                     print_acc(f"  Cap status: {cap_status}")
                     print_acc(f"  Current position: {current_pos}")
                     print_acc(f"  Reported total frames: {reported_total}")
-                    
+
                     # Try to verify if the video is corrupted
                     if cap.isOpened():
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Go to start
                         start_ret, _ = cap.read()
-                        
+
                         # Try to read the last frame to check if it's accessible
                         if reported_total > 0:
                             cap.set(cv2.CAP_PROP_POS_FRAMES, reported_total - 1)
                             end_ret, _ = cap.read()
                             print_acc(f"  Can read first frame: {start_ret}, Can read last frame: {end_ret}")
-                    
+
                     # Close the cap if it's still open
                     cap.release()
             except Exception as debug_err:
                 print_acc(f"Error during error diagnosis: {debug_err}")
-            
+
             print_acc(f"Error: {error_msg}")
             print_acc(f"Error loading video: {self.path}")
-            
+
             # Re-raise with more detailed information
             raise Exception(f"Video loading error ({self.path}): {error_msg}") from e
-        
+
     def load_and_process_image(
             self: 'FileItemDTO',
             transform: Union[None, transforms.Compose],
@@ -771,6 +798,9 @@ class ImageProcessingDTOMixin:
                 self.load_mask_image()
             if self.has_unconditional:
                 self.load_unconditional_image()
+            return
+        if self.is_audio_model:
+            self.load_and_process_audio()
             return
         if self.dataset_config.num_frames > 1 or self.dataset_config.auto_frame_count:
             self.load_and_process_video(transform, only_load_latents)
@@ -895,7 +925,7 @@ class InpaintControlFileItemDTOMixin:
                     self.inpaint_path = p
                     self.has_inpaint_image = True
                     break
-                
+
     def load_inpaint_image(self: 'FileItemDTO'):
         try:
             # image must have alpha channel for inpaint
@@ -904,7 +934,7 @@ class InpaintControlFileItemDTOMixin:
             if img.mode != 'RGBA':
                 return
             img = exif_transpose(img)
-        
+
             w, h = img.size
             if w > h and self.scale_to_width < self.scale_to_height:
                 # throw error, they should match
@@ -935,7 +965,7 @@ class InpaintControlFileItemDTOMixin:
                 ))
             else:
                 raise Exception("Inpaint images not supported for non-bucket datasets")
-            
+
             transform = transforms.Compose([
                 transforms.ToTensor(),
             ])
@@ -943,18 +973,18 @@ class InpaintControlFileItemDTOMixin:
                 tensor = self.augment_spatial_control(img, transform=transform)
             else:
                 tensor = transform(img)
-            
+
             # is 0 to 1 with alpha
             self.inpaint_tensor = tensor
-        
+
         except Exception as e:
             print_acc(f"Error: {e}")
             print_acc(f"Error loading image: {self.inpaint_path}")
 
-    
+
     def cleanup_inpaint(self: 'FileItemDTO'):
         self.inpaint_tensor = None
-                
+
 
 class ControlFileItemDTOMixin:
     def __init__(self: 'FileItemDTO', *args, **kwargs):
@@ -977,7 +1007,7 @@ class ControlFileItemDTOMixin:
             # we are using control images
             img_path = kwargs.get('path', None)
             file_name_no_ext = os.path.splitext(os.path.basename(img_path))[0]
-            
+
             found_control_images = []
             for control_path in control_path_list:
                 for ext in img_ext_list:
@@ -997,7 +1027,7 @@ class ControlFileItemDTOMixin:
         control_path_list = self.control_path
         if not isinstance(self.control_path, list):
             control_path_list = [self.control_path]
-        
+
         for control_path in control_path_list:
             try:
                 img = Image.open(control_path)
@@ -1016,7 +1046,7 @@ class ControlFileItemDTOMixin:
             except Exception as e:
                 print_acc(f"Error: {e}")
                 print_acc(f"Error loading image: {control_path}")
-            
+
             if not self.full_size_control_images:
                 # we just scale them to 512x512:
                 w, h = img.size
@@ -1052,7 +1082,7 @@ class ControlFileItemDTOMixin:
             else:
                 tensor = transform(img)
             control_tensors.append(tensor)
-            
+
         if len(control_tensors) == 0:
             self.control_tensor = None
         elif len(control_tensors) == 1:
@@ -1105,7 +1135,7 @@ class ClipImageFileItemDTOMixin:
                     self.has_clip_image = True
                     break
             self.build_clip_imag_augmentation_transform()
-            
+
         if dataset_config.clip_image_from_same_folder:
             # assume we have one. We will pull it on load.
             self.has_clip_image = True
@@ -1194,7 +1224,7 @@ class ClipImageFileItemDTOMixin:
             self._clip_vision_embeddings_path = os.path.join(latent_dir, f'{filename_no_ext}_{hash_str}.safetensors')
 
         return self._clip_vision_embeddings_path
-    
+
     def get_new_clip_image_path(self: 'FileItemDTO'):
         if self.dataset_config.clip_image_from_same_folder:
             # randomly grab an image path from the same folder
@@ -1243,7 +1273,7 @@ class ClipImageFileItemDTOMixin:
         if self.flip_y:
             # do a flip
             img = img.transpose(Image.FLIP_TOP_BOTTOM)
-            
+
         if is_dynamic_size_and_aspect:
             pass  # let the image processor handle it
         elif img.width != img.height:
@@ -1852,6 +1882,8 @@ class LatentCachingMixin:
         self.latent_cache = {}
 
     def cache_latents_all_latents(self: 'AiToolkitDataset'):
+        if self.is_audio_model:
+            raise Exception("Audio models are not supported for latent caching yet")
         with accelerator.main_process_first():
             print_acc(f"Caching latents for {self.dataset_path}")
             # cache all latents to disk
@@ -1916,16 +1948,16 @@ class LatentCachingMixin:
                         first_frame_latent = self.sd.encode_images(first_frames).squeeze(0)
                         if to_disk:
                             state_dict['first_frame_latent'] = first_frame_latent.clone().detach().cpu()
-                    
+
                     # audio
                     if file_item.audio_data is not None:
                         audio_latent = self.sd.encode_audio([file_item.audio_data]).squeeze(0)
                         if to_disk:
                             state_dict['audio_latent'] = audio_latent.clone().detach().cpu()
-                    
+
                     if is_video:
                         state_dict['num_frames'] = torch.tensor(file_item.num_frames, dtype=torch.int32)
-                    
+
                     # save_latent
                     if to_disk:
                         # metadata
@@ -2023,7 +2055,7 @@ class TextEmbeddingCachingMixin:
         with accelerator.main_process_first():
             print_acc(f"Caching text_embeddings for {self.dataset_path}")
             print_acc(" - Saving text embeddings to disk")
-            
+
             did_move = False
 
             # use tqdm to show progress
@@ -2038,7 +2070,7 @@ class TextEmbeddingCachingMixin:
                     if not did_move:
                         self.sd.set_device_state_preset('cache_text_encoder')
                         did_move = True
-                        
+
                     if file_item.encode_control_in_text_embeddings:
                         if file_item.control_path is None:
                             raise Exception(f"Could not find a control image for {file_item.path} which is needed for this model")
@@ -2060,7 +2092,7 @@ class TextEmbeddingCachingMixin:
                             except Exception as e:
                                 print_acc(f"Error: {e}")
                                 print_acc(f"Error loading control image: {control_path_list[i]}")
-                        
+
                         if len(ctrl_img_list) == 0:
                             ctrl_img = None
                         elif not self.sd.has_multiple_control_images:
@@ -2259,7 +2291,7 @@ class ControlCachingMixin:
         if hasattr(super(), '__init__'):
             super().__init__(**kwargs)
             self.control_generator: ControlGenerator = None
-    
+
     def add_control_path_to_file_item(self: 'AiToolkitDataset', file_item: 'FileItemDTO', control_path: str, control_type: ControlTypes):
         if control_type == 'inpaint':
             file_item.inpaint_path = control_path
@@ -2284,7 +2316,7 @@ class ControlCachingMixin:
         with torch.no_grad():
             print_acc(f"Generating controls for {self.dataset_path}")
             device = self.sd.device
-            
+
             self.control_generator = ControlGenerator(
                 device=device,
                 sd=self.sd,
@@ -2297,9 +2329,9 @@ class ControlCachingMixin:
                     control_path = self.control_generator.get_control_path(file_item.path, control_type)
                     if control_path is not None:
                         self.add_control_path_to_file_item(file_item, control_path, control_type)
-                
+
             # remove models
             self.control_generator.cleanup()
             self.control_generator = None
-            
+
             flush()

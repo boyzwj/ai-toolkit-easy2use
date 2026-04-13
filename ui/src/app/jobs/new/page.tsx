@@ -35,7 +35,7 @@ export default function TrainingForm() {
   const [datasetOptions, setDatasetOptions] = useState<{ value: string; label: string }[]>([]);
   const [showAdvancedView, setShowAdvancedView] = useState(false);
 
-  const [jobConfig, setJobConfig] = useNestedState<JobConfig>(objectCopy(defaultJobConfig));
+  const [jobConfig, setJobConfig] = useNestedState<JobConfig>(objectCopy(migrateJobConfig(defaultJobConfig)));
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -270,8 +270,7 @@ export default function TrainingForm() {
         </div>
         <div>
           <Button
-            // 保存/创建按钮：同样缩小移动端尺寸并保持不换行
-            className="text-gray-200 bg-green-800 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
+            className="text-white bg-green-600 hover:bg-green-700 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
             onClick={() => saveJob()}
             disabled={status === 'saving'}
           >
