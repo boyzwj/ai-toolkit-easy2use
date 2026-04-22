@@ -15,10 +15,11 @@
 
 ## 当前支持概览
 
-- 图像：FLUX.1 / FLUX.2 / FLUX.2 Klein / Qwen-Image / Qwen-Image-2512 / Z-Image / SDXL / SD1.5 等
+- 图像：FLUX.1 / FLUX.2 / FLUX.2 Klein / Qwen-Image / Qwen-Image-2512 / Z-Image / SDXL / SD1.5 / ERNIE-Image / Nucleus-Image 等
 - 编辑：Qwen-Image-Edit / Qwen-Image-Edit-2509 / Qwen-Image-Edit-2511 / HiDream E1 / FireRed-Image-Edit-1.1 预设
 - 视频：Wan 2.x / LTX-2 / LTX-2.3 等
 - 音频：ACE-Step 1.5 / ACE-Step 1.5 XL
+- 实验性：Zeta-Chroma 等
 
 ## 环境要求
 
@@ -158,6 +159,7 @@ $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
 ## 近期已并入的重要上游能力
 
 - Qwen Image 原生增加 `1328` 分辨率支持
+- 新增 `ERNIE-Image` 与 `Nucleus-Image` 模型支持
 - Flux2 / Flux2 Klein 低显存加载、量化顺序和控制图编码修复
 - `compile: true` 真正生效，并修复 compile 时序
 - 数据集页支持 duplicate dataset、改进拖拽 / 上传模型、隐藏文件过滤
