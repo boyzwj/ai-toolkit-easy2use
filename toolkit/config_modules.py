@@ -499,8 +499,7 @@ class TrainConfig:
         self.correct_pred_norm = kwargs.get('correct_pred_norm', False)
         self.correct_pred_norm_multiplier = kwargs.get('correct_pred_norm_multiplier', 1.0)
 
-        self.loss_type = kwargs.get('loss_type', 'mse') # mse, mae, wavelet, pixelspace, mean_flow
-
+        self.loss_type = kwargs.get('loss_type', 'mse') # mse, mae, wavelet, pixelspace, mean_flow, pseudo_huber
         # do the loss on a timestep to 0 prediction
         self.t0_loss_target = kwargs.get('t0_loss_target', False)
 
@@ -706,7 +705,7 @@ class ModelConfig:
 
         # model paths for models that support it
         self.model_paths = kwargs.get("model_paths", {})
-
+        self.in_context = kwargs.get("in_context", False)
         # allow frontend to pass arch with a color like arch:tag
         # but remove the tag
         if self.arch is not None:
@@ -1387,5 +1386,4 @@ def validate_configs(
 
     if train_config.batch_size > 1 and any(dataset_config.auto_frame_count for dataset_config in dataset_configs):
         raise ValueError("Cannot use batch size greater than 1 with auto_frame_count. Please set batch_size to 1 or auto_frame_count to False.")
-
 
