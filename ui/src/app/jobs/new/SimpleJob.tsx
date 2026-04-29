@@ -594,7 +594,6 @@ export default function SimpleJob({
                     { value: 'automagic', label: 'Automagic' },
                     { value: 'prodigyopt', label: 'Prodigy' },
                     { value: 'prodigy8bit', label: 'Prodigy8Bit' },
-                    { value: 'prodigy_8bit', label: 'Prodigy 8bit' },
                   ]}
                   docKey="train.optimizer"
                 />
