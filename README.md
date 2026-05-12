@@ -156,6 +156,25 @@ AI_TOOLKIT_AUTH=your_token npm run build_and_start
 $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
 ```
 
+## 本仓库新增特性
+
+### ModelScope 模型下载源
+
+设置页（`/settings`）新增「模型下载源」选项，支持切换 HuggingFace 官方源和 ModelScope 国内镜像源。选择 ModelScope 后，训练和打标任务的模型下载会自动通过 `modelscope` 包重定向到 `modelscope.cn`，适合国内网络环境。
+
+> 需要 `pip install modelscope`，模型下载源切换后新建的任务会自动生效。
+
+### 自定义 API 打标增强
+
+数据集自动打标选择「自定义 API」时，填写 Base URL 和 API Key 后点击「测试 API」：
+- 使用 `GET /health` 检查连通性
+- 自动调用 `GET /v1/models` 拉取可用模型列表
+- 模型名称以下拉框选取，无需手动输入
+
+### 打标草稿自动保存
+
+打标弹窗中的配置会自动保存到数据库，关闭后重新打开可恢复上次填写的内容，避免重复输入。
+
 ## 近期已并入的重要上游能力
 
 - Qwen Image 原生增加 `1328` 分辨率支持
