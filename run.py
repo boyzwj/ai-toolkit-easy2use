@@ -14,15 +14,42 @@ _model_source_patched = False
 _model_source_version = ""
 if os.environ.get("MODEL_SOURCE", "") == "modelscope":
     try:
-        # patch_hub() replaces huggingface_hub.hf_hub_download with modelscope's
+        import functools
         from modelscope.utils.hf_util.patcher import patch_hub
+        import huggingface_hub
+
+        # Save original BEFORE patch
+        _orig_hf_download = huggingface_hub.hf_hub_download
+
+        # Apply modelscope patch
         patch_hub()
         import modelscope
         _model_source_patched = True
         _model_source_version = modelscope.__version__
+
+        # Save patched AFTER patch
+        _patched_hf_download = huggingface_hub.hf_hub_download
+
         # HF_TOKEN is a HuggingFace token, not a ModelScope one. Remove it so
         # patched hf_hub_download calls don't pass it to modelscope's login.
         os.environ.pop("HF_TOKEN", None)
+
+        # Wrap hf_hub_download: try modelscope first, fallback to HF on 404.
+        # snapshot_download calls hf_hub_download internally, so this covers both.
+        @functools.wraps(_orig_hf_download)
+        def _hf_download_with_fallback(*args, **kwargs):
+            try:
+                return _patched_hf_download(*args, **kwargs)
+            except Exception as e:
+                status = None
+                if hasattr(e, 'response') and e.response is not None:
+                    status = e.response.status_code
+                if status == 404:
+                    return _orig_hf_download(*args, **kwargs)
+                raise
+
+        huggingface_hub.hf_hub_download = _hf_download_with_fallback
+
     except ImportError:
         _model_source_patched = False
 
