@@ -20,6 +20,7 @@ import SimpleJob from './SimpleJob';
 import AdvancedConfigEditor from '@/components/AdvancedConfigEditor';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { apiClient } from '@/utils/api';
+import { loadTrainingDraft, saveTrainingDraft } from '@/helpers/trainingDraftStorage';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -38,6 +39,8 @@ export default function TrainingForm() {
   const [jobConfig, setJobConfig] = useNestedState<JobConfig>(objectCopy(migrateJobConfig(defaultJobConfig)));
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const latestDraftRef = useRef({ jobConfig, gpuIDs });
+  latestDraftRef.current = { jobConfig, gpuIDs };
 
   const handleImportConfig = () => {
     fileInputRef.current?.click();
@@ -133,6 +136,40 @@ export default function TrainingForm() {
         .catch(error => console.error('Error fetching training:', error));
     }
   }, [runId]);
+
+  // load draft for new jobs
+  useEffect(() => {
+    if (runId || cloneId) return;
+    loadTrainingDraft(migrateJobConfig(defaultJobConfig)).then(draft => {
+      if (!draft) {
+        console.log('[Draft] no saved draft found');
+        return;
+      }
+      console.log('[Draft] loaded draft, model arch:', draft.jobConfig.config.process[0].model?.arch);
+      setJobConfig(draft.jobConfig);
+      setGpuIDs(prev => draft.gpuIDs ?? prev);
+    });
+  }, []);
+
+  // auto-save draft on changes (debounced 1s)
+  useEffect(() => {
+    if (runId || cloneId) return;
+    const timer = setTimeout(() => {
+      saveTrainingDraft({ jobConfig, gpuIDs }).catch(e =>
+        console.error('Failed to save training draft:', e),
+      );
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [jobConfig, gpuIDs, runId, cloneId]);
+
+  // save draft on unmount (reads latest value from ref to avoid stale closure)
+  useEffect(() => {
+    if (runId || cloneId) return;
+    return () => {
+      const { jobConfig: jc, gpuIDs: gpu } = latestDraftRef.current;
+      saveTrainingDraft({ jobConfig: jc, gpuIDs: gpu });
+    };
+  }, []);
 
   useEffect(() => {
     if (isGPUInfoLoaded) {
