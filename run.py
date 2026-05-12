@@ -15,38 +15,34 @@ _model_source_version = ""
 if os.environ.get("MODEL_SOURCE", "") == "modelscope":
     try:
         import functools
-        from modelscope.utils.hf_util.patcher import patch_hub
         import huggingface_hub
 
-        # Save original BEFORE patch
         _orig_hf_download = huggingface_hub.hf_hub_download
 
-        # Apply modelscope patch
-        patch_hub()
-        import modelscope
-        _model_source_patched = True
-        _model_source_version = modelscope.__version__
-
-        # Save patched AFTER patch
-        _patched_hf_download = huggingface_hub.hf_hub_download
-
-        # HF_TOKEN is a HuggingFace token, not a ModelScope one. Remove it so
-        # patched hf_hub_download calls don't pass it to modelscope's login.
+        # HF_TOKEN is a HuggingFace token, not a ModelScope one.
         os.environ.pop("HF_TOKEN", None)
 
-        # Wrap hf_hub_download: try modelscope first, fallback to HF on 404.
-        # snapshot_download calls hf_hub_download internally, so this covers both.
+        # Wrap hf_hub_download: try hf-mirror first (fastest in China),
+        # fall back to direct HuggingFace on any error.
         @functools.wraps(_orig_hf_download)
         def _hf_download_with_fallback(*args, **kwargs):
+            token = kwargs.pop('token', None)
+            old_endpoint = os.environ.get("HF_ENDPOINT")
+            os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
             try:
-                return _patched_hf_download(*args, **kwargs)
-            except Exception as e:
-                status = None
-                if hasattr(e, 'response') and e.response is not None:
-                    status = e.response.status_code
-                if status == 404:
-                    return _orig_hf_download(*args, **kwargs)
-                raise
+                return _orig_hf_download(*args, **kwargs)
+            except Exception:
+                # mirror failed, retry with original endpoint + token
+                if old_endpoint:
+                    os.environ["HF_ENDPOINT"] = old_endpoint
+                else:
+                    os.environ.pop("HF_ENDPOINT", None)
+                return _orig_hf_download(*args, token=token, **kwargs)
+            finally:
+                if old_endpoint:
+                    os.environ["HF_ENDPOINT"] = old_endpoint
+                else:
+                    os.environ.pop("HF_ENDPOINT", None)
 
         huggingface_hub.hf_hub_download = _hf_download_with_fallback
 
