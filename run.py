@@ -20,6 +20,9 @@ if os.environ.get("MODEL_SOURCE", "") == "modelscope":
         import modelscope
         _model_source_patched = True
         _model_source_version = modelscope.__version__
+        # HF_TOKEN is a HuggingFace token, not a ModelScope one. Remove it so
+        # patched hf_hub_download calls don't pass it to modelscope's login.
+        os.environ.pop("HF_TOKEN", None)
     except ImportError:
         _model_source_patched = False
 
