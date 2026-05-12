@@ -35,3 +35,10 @@ export const getHFToken = async () => {
   }
   return token;
 };
+
+export const getModelSource = async (): Promise<string> => {
+  let row = await prisma.settings.findFirst({
+    where: { key: 'MODEL_SOURCE' },
+  });
+  return row?.value || 'huggingface';
+};

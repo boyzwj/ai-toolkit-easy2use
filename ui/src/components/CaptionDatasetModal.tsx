@@ -17,6 +17,7 @@ import CaptionSimpleJob from '@/components/CaptionSimpleJob';
 import AdvancedConfigEditor from '@/components/AdvancedConfigEditor';
 import { SelectInput } from '@/components/formInputs';
 import { Loader2 } from 'lucide-react';
+import { loadCaptionDraft, saveCaptionDraft } from '@/helpers/captionDraftStorage';
 
 export interface CaptionDatasetModalState {
   datasetPath: string;
@@ -81,6 +82,28 @@ export const CaptionDatasetModal: React.FC = () => {
     }
   }, [modalInfo?.cloneId]);
 
+  // load draft for new jobs
+  useEffect(() => {
+    if (!modalInfo || modalInfo.cloneId || modalInfo.jobId) return;
+    loadCaptionDraft(defaultCaptionJobConfig).then(draft => {
+      if (!draft) return;
+      setJobConfig(draft.jobConfig);
+      setGpuIDs(prev => draft.gpuIDs ?? prev);
+      if (modalInfo.datasetPath) {
+        setJobConfig(modalInfo.datasetPath, 'config.process[0].caption.path_to_caption');
+      }
+    });
+  }, [modalInfo]);
+
+  // auto-save draft on changes (debounced)
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => {
+      saveCaptionDraft({ jobConfig, gpuIDs });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [jobConfig, gpuIDs, open]);
+
   // load existing caption job for editing
   useEffect(() => {
     if (modalInfo?.jobId) {
@@ -106,6 +129,7 @@ export const CaptionDatasetModal: React.FC = () => {
   }, [gpuList, isGPUInfoLoaded]);
 
   const handleClose = () => {
+    saveCaptionDraft({ jobConfig, gpuIDs });
     if (modalInfo?.onClose) {
       modalInfo.onClose();
     }

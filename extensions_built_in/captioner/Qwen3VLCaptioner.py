@@ -1,3 +1,4 @@
+import os
 from transformers import (
     Qwen3VLForConditionalGeneration,
     Qwen3VLMoeForConditionalGeneration,
@@ -30,8 +31,12 @@ class Qwen3VLCaptioner(BaseCaptioner):
             if "B-A" in self.caption_config.model_name_or_path
             else Qwen3VLForConditionalGeneration
         )
+        model_path = self.caption_config.model_name_or_path
+        endpoint = os.environ.get("HF_ENDPOINT", "")
+        ms_var = os.environ.get("MODEL_SOURCE", "")
+        self.print_and_status_update(f"Loading model '{model_path}' | MODEL_SOURCE={ms_var} | HF_ENDPOINT={endpoint}")
         self.model = ModelClass.from_pretrained(
-            self.caption_config.model_name_or_path,
+            model_path,
             dtype=self.torch_dtype,
             device_map="cpu",
         )

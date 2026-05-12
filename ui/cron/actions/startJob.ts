@@ -3,7 +3,7 @@ import { Job } from '@prisma/client';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import { TOOLKIT_ROOT, getTrainingFolder, getHFToken } from '../paths';
+import { TOOLKIT_ROOT, getTrainingFolder, getHFToken, getModelSource } from '../paths';
 const isWindows = process.platform === 'win32';
 
 const startAndWatchJob = (job: Job) => {
@@ -92,6 +92,12 @@ const startAndWatchJob = (job: Job) => {
     const hfToken = await getHFToken();
     if (hfToken && hfToken.trim() !== '') {
       additionalEnv.HF_TOKEN = hfToken;
+    }
+
+    // MODEL_SOURCE (modelscope mirror)
+    const modelSource = await getModelSource();
+    if (modelSource && modelSource !== 'huggingface') {
+      additionalEnv.MODEL_SOURCE = modelSource;
     }
 
     // Add the --log argument to the command

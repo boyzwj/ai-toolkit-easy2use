@@ -97,6 +97,10 @@ class BaseCaptioner(BaseExtensionProcess):
         with torch.no_grad():
             self.start_stop_watcher()
             self.update_status("running", "Loading Model")
+            endpoint = os.environ.get("HF_ENDPOINT", "(not set)")
+            ms_var = os.environ.get("MODEL_SOURCE", "(not set)")
+            hf_token = "set" if os.environ.get("HF_TOKEN", "") else "(not set)"
+            print(f"[Captioner] MODEL_SOURCE={ms_var} | HF_ENDPOINT={endpoint} | HF_TOKEN={hf_token}")
             self.load_model()
             self.update_status("running", "Looking for files")
             self.find_files()

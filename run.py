@@ -5,6 +5,24 @@ from dotenv import load_dotenv
 load_dotenv()
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = os.getenv("HF_HUB_ENABLE_HF_TRANSFER", "1")
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+
+# ModelScope mirror integration — patches huggingface_hub
+# to redirect model downloads to modelscope.cn.
+# The import must happen here (before torch/huggingface_hub), but
+# logging is deferred to main() after the log file is set up.
+_model_source_patched = False
+_model_source_version = ""
+if os.environ.get("MODEL_SOURCE", "") == "modelscope":
+    try:
+        # patch_hub() replaces huggingface_hub.hf_hub_download with modelscope's
+        from modelscope.utils.hf_util.patcher import patch_hub
+        patch_hub()
+        import modelscope
+        _model_source_patched = True
+        _model_source_version = modelscope.__version__
+    except ImportError:
+        _model_source_patched = False
+
 seed = None
 if "SEED" in os.environ:
     try:
@@ -94,6 +112,14 @@ def main():
 
     if args.log is not None:
         setup_log_to_file(args.log)
+
+    if accelerator.is_main_process:
+        if os.environ.get("MODEL_SOURCE", "") == "modelscope":
+            if _model_source_patched:
+                ver = _model_source_version or "?"
+                print_acc(f"ModelScope v{ver} active — model downloads using modelscope.cn")
+            else:
+                print_acc("WARNING: MODEL_SOURCE=modelscope but modelscope package NOT installed. Falling back to HuggingFace.")
 
     config_file_list = args.config_file_list
     if len(config_file_list) == 0:

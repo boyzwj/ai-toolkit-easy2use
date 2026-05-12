@@ -41,6 +41,7 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
   const additionalSections = selectedCaptionOption?.additionalSections || [];
   const [apiTestStatus, setApiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [apiTestMessage, setApiTestMessage] = useState('');
+  const [apiModels, setApiModels] = useState<{ value: string; label: string }[]>([]);
   const isRemoteApiCaptioner = jobConfig.config.process[0].type === 'RemoteAPICaptioner';
   const promptTemplateValue = jobConfig.config.process[0].caption.prompt_template || defaultCaptionPromptTemplate;
   const targetLanguageValue = jobConfig.config.process[0].caption.target_lang || defaultCaptionTargetLanguage;
@@ -77,6 +78,7 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
       setApiTestStatus('idle');
       setApiTestMessage('');
     }
+    setApiModels([]);
   }, [
     jobConfig.config.process[0].caption.api_base_url,
     jobConfig.config.process[0].caption.api_concurrency,
@@ -104,11 +106,6 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
 
   const testRemoteApi = async () => {
     const captionConfig = jobConfig.config.process[0].caption;
-    if (!captionConfig.model_name_or_path?.trim()) {
-      setApiTestStatus('error');
-      setApiTestMessage('请先填写模型名称。');
-      return;
-    }
     if (!captionConfig.api_base_url?.trim()) {
       setApiTestStatus('error');
       setApiTestMessage('请先填写 Base URL。');
@@ -133,6 +130,14 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
       const preview = response.data?.preview ? `，返回：${response.data.preview}` : '';
       setApiTestStatus('success');
       setApiTestMessage(`${response.data?.message || 'API 连通性测试通过'}${preview}`);
+
+      if (response.data?.models && Array.isArray(response.data.models) && response.data.models.length > 0) {
+        const models = response.data.models.map((m: string) => ({ value: m, label: m }));
+        setApiModels(models);
+        if (!captionConfig.model_name_or_path?.trim()) {
+          setJobConfig(models[0].value, 'config.process[0].caption.model_name_or_path');
+        }
+      }
     } catch (error: any) {
       const details = error?.response?.data?.details || error?.response?.data?.error || error?.message || '未知错误';
       setApiTestStatus('error');
@@ -165,20 +170,35 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
         )}
       </div>
       <div className="mt-4">
-        <CreatableSelectInput
-          label={isRemoteApiCaptioner ? '模型名称' : '模型名称或路径'}
-          value={jobConfig.config.process[0].caption.model_name_or_path}
-          docKey="config.process[0].caption.model_name_or_path"
-          onChange={(value: string | null) => {
-            if (value?.trim() === '') {
-              value = null;
-            }
-            setJobConfig(value, 'config.process[0].caption.model_name_or_path');
-          }}
-          placeholder=""
-          options={selectedCaptionOption?.name_or_path_options || []}
-          required
-        />
+        {isRemoteApiCaptioner ? (
+          apiModels.length > 0 ? (
+            <SelectInput
+              label="模型名称"
+              value={jobConfig.config.process[0].caption.model_name_or_path || ''}
+              onChange={value => setJobConfig(value, 'config.process[0].caption.model_name_or_path')}
+              options={apiModels}
+            />
+          ) : (
+            <div className="text-sm text-gray-500 py-2">
+              请先测试 API 以获取模型列表
+            </div>
+          )
+        ) : (
+          <CreatableSelectInput
+            label="模型名称或路径"
+            value={jobConfig.config.process[0].caption.model_name_or_path}
+            docKey="config.process[0].caption.model_name_or_path"
+            onChange={(value: string | null) => {
+              if (value?.trim() === '') {
+                value = null;
+              }
+              setJobConfig(value, 'config.process[0].caption.model_name_or_path');
+            }}
+            placeholder=""
+            options={selectedCaptionOption?.name_or_path_options || []}
+            required
+          />
+        )}
       </div>
       {additionalSections.includes('caption.api_base_url') && (
         <div className="mt-4">

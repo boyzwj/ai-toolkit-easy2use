@@ -29,7 +29,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { HF_TOKEN, TRAINING_FOLDER, DATASETS_FOLDER } = body;
+    const { HF_TOKEN, TRAINING_FOLDER, DATASETS_FOLDER, MODEL_SOURCE } = body;
 
     // Upsert both settings
     await Promise.all([
@@ -47,6 +47,11 @@ export async function POST(request: Request) {
         where: { key: 'DATASETS_FOLDER' },
         update: { value: DATASETS_FOLDER },
         create: { key: 'DATASETS_FOLDER', value: DATASETS_FOLDER },
+      }),
+      prisma.settings.upsert({
+        where: { key: 'MODEL_SOURCE' },
+        update: { value: MODEL_SOURCE },
+        create: { key: 'MODEL_SOURCE', value: MODEL_SOURCE },
       }),
     ]);
 

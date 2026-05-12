@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import useSettings from '@/hooks/useSettings';
 import { TopBar, MainContent } from '@/components/layout';
 import { apiClient } from '@/utils/api';
+import { SelectInput } from '@/components/formInputs';
 
 export default function Settings() {
   const { settings, setSettings } = useSettings();
@@ -103,6 +104,23 @@ export default function Settings() {
                     onChange={handleChange}
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                     placeholder="输入数据集目录路径"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    模型下载源
+                    <div className="text-gray-500 text-sm ml-1">
+                      选择模型下载源。HuggingFace 为官方源；ModelScope 为国内镜像源（仅限公开模型），需要安装 modelscope 包。
+                    </div>
+                  </label>
+                  <SelectInput
+                    value={settings.MODEL_SOURCE}
+                    onChange={value => setSettings(prev => ({ ...prev, MODEL_SOURCE: value }))}
+                    options={[
+                      { value: 'huggingface', label: 'HuggingFace' },
+                      { value: 'modelscope', label: 'ModelScope（魔搭社区，国内推荐）' },
+                    ]}
                   />
                 </div>
               </div>

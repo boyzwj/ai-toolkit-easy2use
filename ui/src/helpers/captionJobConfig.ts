@@ -1,6 +1,9 @@
 import { CaptionJobConfig } from "@/types";
 import { captionerTypes } from "./captionOptions";
+import { defaultCaptionPromptTemplate, defaultCaptionTargetLanguage, buildCaptionPrompt } from './captionPrompts';
 
+
+const defaultImageCaptionPrompt = buildCaptionPrompt(defaultCaptionPromptTemplate, defaultCaptionTargetLanguage);
 
 export const defaultCaptionJobConfig: CaptionJobConfig = {
   job: 'extension',
@@ -8,19 +11,26 @@ export const defaultCaptionJobConfig: CaptionJobConfig = {
     name: 'Caption Directory',
     process: [
       {
-        type: 'AceStepCaptioner',
-        sqlite_db_path: './aitk_db.db',
+        type: 'RemoteAPICaptioner',
         device: 'cuda',
         caption: {
-          model_name_or_path: "ACE-Step/acestep-transcriber",
-          model_name_or_path2: "ACE-Step/acestep-captioner",
-          dtype: 'bf16',
-          quantize: true,
-          qtype: 'float8',
-          low_vram: true,
-          extensions: ['mp3', 'wav', 'flac', 'ogg'],
+          model_name_or_path: '',
+          api_base_url: '',
+          api_key: '',
+          api_protocol: 'openai',
+          prompt_template: defaultCaptionPromptTemplate,
+          target_lang: defaultCaptionTargetLanguage,
+          caption_prompt: defaultImageCaptionPrompt,
+          extensions: ['jpg', 'jpeg', 'png', 'bmp', 'webp'],
           path_to_caption: '',
           recaption: false,
+          max_res: 512,
+          max_new_tokens: 128,
+          api_concurrency: 20,
+          dtype: 'bf16',
+          qtype: 'float8',
+          quantize: false,
+          low_vram: false,
         },
       },
     ],
