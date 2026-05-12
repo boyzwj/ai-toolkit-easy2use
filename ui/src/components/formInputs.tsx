@@ -354,7 +354,6 @@ export const CreatableSelectInput = (props: CreatableSelectInputProps) => {
                 const val = (selected as { value: string }).value;
                 if (val === CUSTOM_SELECT_VALUE) {
                   setIsCustom(true);
-                  onChange('');
                 } else {
                   setIsCustom(false);
                   onChange(val);
