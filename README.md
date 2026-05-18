@@ -15,7 +15,7 @@
 
 ## 当前支持概览
 
-- 图像：FLUX.1 / FLUX.2 / FLUX.2 Klein / Qwen-Image / Qwen-Image-2512 / Z-Image / SDXL / SD1.5 / ERNIE-Image / Nucleus-Image 等
+- 图像：FLUX.1 / FLUX.2 / FLUX.2 Klein / Qwen-Image / Qwen-Image-2512 / HiDream-O1 / Z-Image / SDXL / SD1.5 / ERNIE-Image / Nucleus-Image 等
 - 编辑：Qwen-Image-Edit / Qwen-Image-Edit-2509 / Qwen-Image-Edit-2511 / HiDream E1 / FireRed-Image-Edit-1.1 预设
 - 视频：Wan 2.x / LTX-2 / LTX-2.3 等
 - 音频：ACE-Step 1.5 / ACE-Step 1.5 XL
@@ -177,6 +177,11 @@ $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
 
 ## 近期已并入的重要上游能力
 
+- **新增 HiDream-O1 微调支持**（`hidream_o1`）：集成官方流水线、训练配置与 LoRA 加载，适配 Comfy 兼容格式。
+- **DFE7（Diffusion Feature Extractor 7）损失加权**：引入基于 `velocity_equiv_weight` 的加权策略，提升训练稳定性与特征误差分布合理性。
+- **恢复训练时清理未来步的 Loss 日志**：当从较早 step 恢复时，自动删除后续步的冗余记录，避免历史日志误导。
+- **DFE 相关模型梯度检查点增强**：兼容更多 checkpointing 接口，降低显存占用。
+- **损失异常值抑制（`max_loss` / `max_loss_debug`）**：支持对单步损失上限截断，防止极端异常值导致训练震荡。
 - Qwen Image 原生增加 `1328` 分辨率支持
 - 新增 `ERNIE-Image` 与 `Nucleus-Image` 模型支持
 - Flux2 / Flux2 Klein 低显存加载、量化顺序和控制图编码修复
@@ -186,7 +191,7 @@ $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
 - ACE-Step 1.5 / XL 音频模型支持
 - `flac` / `ogg` 支持
 - Light Mode 支持
-- `AdvancedPromptEmbeds` 引入，增强 prompt/embed 兼容能力
+- `AdvancedPromptEmbeds` 引入与增强：新增 `frozen_dtype_keys` 机制，兼容需要部分张量锁定精度的模型。
 
 ## 中文版 UI 截图
 
