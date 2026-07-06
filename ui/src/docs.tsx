@@ -43,6 +43,15 @@ const docs: { [key: string]: ConfigDoc } = {
       </>
     ),
   },
+  'config.process[0].model.te_name_or_path': {
+    title: '文本编码器路径',
+    description: (
+      <>
+        可选：单独指定文本编码器仓库或本地文件路径。Sulphur-2/LTX-2.3 使用 ComfyUI Gemma safetensors 时可填{' '}
+        <code>~/models/gemma_3_12B_it_fp4_mixed.safetensors</code>。留空时会使用模型架构默认文本编码器，可能触发 HuggingFace 下载。
+      </>
+    ),
+  },
   'config.process[0].model.arch': {
     title: '模型架构',
     description: (

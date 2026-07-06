@@ -291,6 +291,20 @@ export default function SimpleJob({
               placeholder=""
               required
             />
+            {modelArch?.additionalSections?.includes('model.te_name_or_path') && (
+              <TextInput
+                label="文本编码器路径"
+                value={jobConfig.config.process[0].model.te_name_or_path ?? ''}
+                docKey="config.process[0].model.te_name_or_path"
+                onChange={(value: string | undefined) => {
+                  if (value?.trim() === '') {
+                    value = undefined;
+                  }
+                  setJobConfig(value, 'config.process[0].model.te_name_or_path');
+                }}
+                placeholder="~/models/gemma_3_12B_it_fp4_mixed.safetensors"
+              />
+            )}
             {modelArch?.additionalSections?.includes('model.assistant_lora_path') && (
               <TextInput
                 label="Training Adapter Path"

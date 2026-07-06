@@ -30,6 +30,7 @@ type AdditionalSections =
   | 'model.multistage'
   | 'model.layer_offloading'
   | 'model.low_vram'
+  | 'model.te_name_or_path'
   | 'model.qie.match_target_res'
   | 'model.assistant_lora_path';
 
@@ -748,6 +749,48 @@ export const modelArchs: ModelArch[] = [
     },
     disableSections: ['network.conv'],
     additionalSections: ['sample.ctrl_img', 'datasets.num_frames', 'model.layer_offloading', 'model.low_vram', 'datasets.do_audio', 'datasets.audio_normalize', 'datasets.audio_preserve_pitch', 'datasets.do_i2v', 'train.audio_loss_multiplier', 'datasets.auto_frame_count'],
+  },
+  {
+    // Sulphur-2 is an LTX-2.3 fine-tune/variant, not a new architecture.
+    // The backend strips the suffix after ':' in ModelConfig, so this reuses LTX23Model.
+    name: 'ltx2.3:sulphur',
+    label: 'Sulphur-2 / LTX-2.3 人物 LoRA',
+    group: 'video',
+    isVideoModel: true,
+    defaults: {
+      // Use the bf16 Sulphur checkpoint for training. The fp8 checkpoint is intended for inference.
+      'config.process[0].model.name_or_path': ['~/models/Sulphur-2-base/sulphur_distil_bf16.safetensors', defaultNameOrPath],
+      'config.process[0].model.te_name_or_path': ['~/models/gemma_3_12B_it_fp4_mixed.safetensors', undefined],
+      'config.process[0].model.quantize': [true, false],
+      'config.process[0].model.quantize_te': [false, false],
+      'config.process[0].model.low_vram': [true, false],
+      'config.process[0].network.linear': [16, defaultLinearRank],
+      'config.process[0].network.linear_alpha': [16, defaultLinearRank],
+      'config.process[0].save.save_every': [300, 250],
+      'config.process[0].train.steps': [1200, 3000],
+      'config.process[0].train.lr': [1e-4, 1e-4],
+      'config.process[0].train.train_text_encoder': [false, false],
+      'config.process[0].train.cache_text_embeddings': [true, false],
+      'config.process[0].sample.sampler': ['flowmatch', 'flowmatch'],
+      'config.process[0].train.noise_scheduler': ['flowmatch', 'flowmatch'],
+      'config.process[0].sample.num_frames': [1, 1],
+      'config.process[0].sample.fps': [24, 1],
+      'config.process[0].sample.width': [512, 1024],
+      'config.process[0].sample.height': [768, 1024],
+      'config.process[0].sample.guidance_scale': [3.0, 4],
+      'config.process[0].sample.sample_steps': [25, 25],
+      'config.process[0].train.audio_loss_multiplier': [undefined, undefined],
+      'config.process[0].train.timestep_type': ['weighted', 'sigmoid'],
+      'config.process[0].datasets[x].resolution': [[512, 768], [512, 768, 1024]],
+      'config.process[0].datasets[x].num_frames': [1, 1],
+      'config.process[0].datasets[x].cache_latents_to_disk': [true, false],
+      'config.process[0].datasets[x].do_i2v': [false, undefined],
+      'config.process[0].datasets[x].do_audio': [false, undefined],
+      'config.process[0].datasets[x].fps': [24, undefined],
+      'config.process[0].datasets[x].auto_frame_count': [false, undefined],
+    },
+    disableSections: ['network.conv'],
+    additionalSections: ['sample.ctrl_img', 'datasets.num_frames', 'model.layer_offloading', 'model.low_vram', 'model.te_name_or_path', 'datasets.do_audio', 'datasets.audio_normalize', 'datasets.audio_preserve_pitch', 'datasets.do_i2v', 'train.audio_loss_multiplier', 'datasets.auto_frame_count'],
   },
   {
     name: 'flux2_klein_4b',

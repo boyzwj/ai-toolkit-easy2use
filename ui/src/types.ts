@@ -165,6 +165,8 @@ export interface ModelConfig {
   qtype_te: string;
   quantize_kwargs?: QuantizeKwargsConfig;
   arch: string;
+  te_name_or_path?: string | null;
+  extras_name_or_path?: string | null;
   low_vram: boolean;
   model_kwargs: { [key: string]: any };
   layer_offloading?: boolean;

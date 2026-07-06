@@ -586,9 +586,19 @@ class TrainConfig:
 ModelArch = Literal['sd1', 'sd2', 'sd3', 'sdxl', 'pixart', 'pixart_sigma', 'auraflow', 'flux', 'flex1', 'flex2', 'lumina2', 'vega', 'ssd', 'wan21']
 
 
+def _expand_local_model_path(path: Optional[str]) -> Optional[str]:
+    if path is None:
+        return None
+    # Allow configs/UI presets to use ~/models or $MODELS_PATH without breaking
+    # HuggingFace repo ids such as org/repo or org/repo/file.safetensors.
+    if path.startswith("~") or "$" in path:
+        return os.path.expanduser(os.path.expandvars(path))
+    return path
+
+
 class ModelConfig:
     def __init__(self, **kwargs):
-        self.name_or_path: str = kwargs.get('name_or_path', None)
+        self.name_or_path: str = _expand_local_model_path(kwargs.get('name_or_path', None)) or ""
         # name or path is updated on fine tuning. Keep a copy of the original
         self.name_or_path_original: str = self.name_or_path
         self.is_v2: bool = kwargs.get('is_v2', False)
@@ -606,14 +616,14 @@ class ModelConfig:
         self.is_vega: bool = kwargs.get('is_vega', False)
         self.is_v_pred: bool = kwargs.get('is_v_pred', False)
         self.dtype: str = kwargs.get('dtype', 'float16')
-        self.vae_path = kwargs.get('vae_path', None)
-        self.refiner_name_or_path = kwargs.get('refiner_name_or_path', None)
+        self.vae_path = _expand_local_model_path(kwargs.get('vae_path', None))
+        self.refiner_name_or_path = _expand_local_model_path(kwargs.get('refiner_name_or_path', None))
         self._original_refiner_name_or_path = self.refiner_name_or_path
         self.refiner_start_at = kwargs.get('refiner_start_at', 0.5)
-        self.lora_path = kwargs.get('lora_path', None)
+        self.lora_path = _expand_local_model_path(kwargs.get('lora_path', None))
         # mainly for decompression loras for distilled models
-        self.assistant_lora_path = kwargs.get('assistant_lora_path', None)
-        self.inference_lora_path = kwargs.get('inference_lora_path', None)
+        self.assistant_lora_path = _expand_local_model_path(kwargs.get('assistant_lora_path', None))
+        self.inference_lora_path = _expand_local_model_path(kwargs.get('inference_lora_path', None))
         self.latent_space_version = kwargs.get('latent_space_version', None)
 
         # only for SDXL models for now
@@ -634,7 +644,7 @@ class ModelConfig:
 
         # for text encoder quant. Only works with pixart currently
         self.text_encoder_bits = kwargs.get('text_encoder_bits', 16)  # 16, 8, 4
-        self.unet_path = kwargs.get("unet_path", None)
+        self.unet_path = _expand_local_model_path(kwargs.get("unet_path", None))
         self.unet_sample_size = kwargs.get("unet_sample_size", None)
         self.vae_device = kwargs.get("vae_device", None)
         self.vae_dtype = kwargs.get("vae_dtype", self.dtype)
@@ -661,7 +671,7 @@ class ModelConfig:
             raise ValueError("split_model_over_gpus is only supported with flux models currently")
         self.split_model_other_module_param_count_scale = kwargs.get("split_model_other_module_param_count_scale", 0.3)
 
-        self.te_name_or_path = kwargs.get("te_name_or_path", None)
+        self.te_name_or_path = _expand_local_model_path(kwargs.get("te_name_or_path", None))
 
         self.arch: ModelArch = kwargs.get("arch", None)
 
@@ -689,7 +699,7 @@ class ModelConfig:
         # can be used to load the extras like text encoder or vae from here
         # only setup for some models but will prevent having to download the te for
         # 20 different model variants
-        self.extras_name_or_path = kwargs.get("extras_name_or_path", self.name_or_path)
+        self.extras_name_or_path = _expand_local_model_path(kwargs.get("extras_name_or_path", self.name_or_path))
 
         # path to an accuracy recovery adapter, either local or remote
         self.accuracy_recovery_adapter = kwargs.get("accuracy_recovery_adapter", None)

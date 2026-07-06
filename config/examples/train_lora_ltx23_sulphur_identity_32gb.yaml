@@ -1,0 +1,99 @@
+# Sulphur-2 / LTX-2.3 identity LoRA example.
+#
+# Purpose:
+#   Train a character/person identity LoRA for Sulphur-2, then use the LoRA with
+#   sulphur_distill_fp8.safetensors in ComfyUI for faster inference.
+#
+# Important:
+#   - Sulphur-2 is an LTX-2.3 variant, so arch stays ltx2.3.
+#   - Train from the bf16 Sulphur checkpoint, not the fp8 inference checkpoint.
+#   - prompt_enhancer_uncensored is only for prompt rewriting; do not use it as the training base.
+---
+job: extension
+config:
+  name: "my_sulphur2_identity_lora_v1"
+  process:
+    - type: 'sd_trainer'
+      training_folder: "output"
+      device: cuda:0
+      # Use a unique identity trigger. Put [trigger] in captions, or the UI/toolkit can prepend it.
+      trigger_word: "zwjperson"
+
+      network:
+        type: "lora"
+        # Start conservative for identity LoRA. Increase to 32 only if underfitting.
+        linear: 16
+        linear_alpha: 16
+
+      save:
+        dtype: bf16
+        save_every: 300
+        max_step_saves_to_keep: 5
+
+      datasets:
+        # Use 30-150 clear images. Mix face/half-body/full-body; do not use only selfies.
+        # Captions should be .txt files with the same basename as each image/video.
+        - folder_path: "/path/to/identity/images"
+          caption_ext: "txt"
+          caption_dropout_rate: 0.05
+          cache_latents_to_disk: true
+          # Keep first pass image-only for identity. Set >1 frames only after image LoRA works.
+          num_frames: 1
+          resolution: [512, 768]
+          do_i2v: false
+          do_audio: false
+          fps: 24
+
+      train:
+        batch_size: 1
+        steps: 1200
+        gradient_accumulation: 1
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: "flowmatch"
+        timestep_type: 'weighted'
+        optimizer: "adamw8bit"
+        lr: 1e-4
+        optimizer_params:
+          weight_decay: 1e-4
+        dtype: bf16
+        # Cache captions/text embeds; keep text encoder frozen for first identity LoRA.
+        cache_text_embeddings: true
+        skip_first_sample: false
+        disable_sampling: false
+
+      model:
+        # Recommended training base. Put the bf16 checkpoint under ~/models or replace with an absolute path.
+        # Do not train from sulphur_distill_fp8.safetensors; it is intended for inference.
+        name_or_path: "~/models/Sulphur-2-base/sulphur_distil_bf16.safetensors"
+        # This suffix is intentional: backend strips ':sulphur' and uses the existing LTX-2.3 class.
+        arch: 'ltx2.3:sulphur'
+        # Optional local ComfyUI text encoder. If omitted, toolkit uses its LTX-2.3 Gemma default and may download it.
+        te_name_or_path: "~/models/gemma_3_12B_it_fp4_mixed.safetensors"
+        quantize: true
+        qtype: "qfloat8"
+        # Do not additionally quantize the text encoder for identity LoRA; face/identity training is sensitive to TE changes.
+        quantize_te: false
+        qtype_te: "qfloat8"
+        low_vram: true
+
+      sample:
+        sampler: "flowmatch"
+        sample_every: 300
+        width: 512
+        height: 768
+        num_frames: 1
+        fps: 24
+        prompts:
+          - "[trigger], clear face, half body portrait, natural light, detailed facial features"
+          - "[trigger], full body standing, clear face, simple background, realistic photo"
+        neg: "blurry face, distorted face, different person, bad anatomy, extra limbs, text, watermark"
+        seed: 42
+        walk_seed: true
+        guidance_scale: 3.0
+        sample_steps: 25
+
+meta:
+  name: "[name]"
+  version: '1.0'
