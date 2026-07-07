@@ -15,9 +15,10 @@ export default function Dashboard() {
         <div>
           <Link
             href="/jobs/new"
-            className="text-white bg-slate-600 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
+            className="text-white bg-slate-600 px-2 sm:px-3 py-1 rounded-md text-sm sm:text-base whitespace-nowrap"
           >
-            新建训练任务
+            <span className="sm:hidden">+ 新建</span>
+            <span className="hidden sm:inline">新建训练任务</span>
           </Link>
         </div>
       </TopBar>

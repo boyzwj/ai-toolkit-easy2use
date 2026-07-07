@@ -45,6 +45,8 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
   const isRemoteApiCaptioner = jobConfig.config.process[0].type === 'RemoteAPICaptioner';
   const promptTemplateValue = jobConfig.config.process[0].caption.prompt_template || defaultCaptionPromptTemplate;
   const targetLanguageValue = jobConfig.config.process[0].caption.target_lang || defaultCaptionTargetLanguage;
+  const minNewTokens = selectedCaptionOption?.minNewTokens ?? 0;
+  const newTokensOptions = maxNewTokensOptions.filter(option => parseInt(option.value) >= minNewTokens);
 
   useEffect(() => {
     if (!additionalSections.includes('caption.caption_prompt')) {
@@ -328,8 +330,22 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
               options={quantizationOptions}
             />
           )}
+          <div className={selectedCaptionOption?.supportsQuantization !== false ? 'mt-4' : ''}>
+            <CreatableSelectInput
+              label="字幕扩展名"
+              value={jobConfig.config.process[0].caption.caption_extension || 'txt'}
+              onChange={value => {
+                setJobConfig(value, 'config.process[0].caption.caption_extension');
+              }}
+              options={[
+                { value: 'txt', label: 'txt' },
+                { value: 'json', label: 'json' },
+                { value: 'caption', label: 'caption' },
+              ]}
+            />
+          </div>
           {additionalSections.includes('caption.max_res') && (
-            <div className={selectedCaptionOption?.supportsQuantization !== false ? 'mt-4' : ''}>
+            <div className="mt-4">
               <SelectInput
                 label="最大分辨率"
                 value={`${jobConfig.config.process[0].caption.max_res || ''}`}
@@ -354,7 +370,7 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
                     setJobConfig(intVal, 'config.process[0].caption.max_new_tokens');
                   }
                 }}
-                options={maxNewTokensOptions}
+                options={newTokensOptions}
               />
             </div>
           )}
@@ -436,6 +452,11 @@ const CaptionSimpleJob: React.FC<Props> = ({ jobConfig, setJobConfig, gpuIDs, se
               label="重新打标"
               checked={jobConfig.config.process[0].caption.recaption}
               onChange={value => setJobConfig(value, 'config.process[0].caption.recaption')}
+            />
+            <Checkbox
+              label="编译模型"
+              checked={jobConfig.config.process[0].caption.compile || false}
+              onChange={value => setJobConfig(value, 'config.process[0].caption.compile')}
             />
           </FormGroup>
         </div>

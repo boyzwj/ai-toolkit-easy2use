@@ -23,6 +23,7 @@ export interface CaptionDatasetModalState {
   datasetPath: string;
   jobId?: string | null;
   cloneId?: string | null;
+  defaultCaptionExt?: string;
   onClose?: () => void;
 }
 
@@ -31,13 +32,14 @@ export const captionDatasetModalState = createGlobalState<CaptionDatasetModalSta
 export const openCaptionDatasetModal = (
   datasetPath: string,
   onClose?: () => void,
-  options?: { jobId?: string | null; cloneId?: string | null },
+  options?: { jobId?: string | null; cloneId?: string | null; defaultCaptionExt?: string },
 ) => {
   captionDatasetModalState.set({
     datasetPath,
     onClose,
     jobId: options?.jobId ?? null,
     cloneId: options?.cloneId ?? null,
+    defaultCaptionExt: options?.defaultCaptionExt,
   });
 };
 
@@ -62,6 +64,11 @@ export const CaptionDatasetModal: React.FC = () => {
     setExistingJobName(null);
     if (modalInfo?.datasetPath) {
       setJobConfig(modalInfo.datasetPath, 'config.process[0].caption.path_to_caption');
+    }
+    // default the caption extension to the current header selection. Editing it
+    // here only changes this job, not the header (separate state).
+    if (modalInfo?.defaultCaptionExt) {
+      setJobConfig(modalInfo.defaultCaptionExt, 'config.process[0].caption.caption_extension');
     }
   }, [modalInfo]);
 

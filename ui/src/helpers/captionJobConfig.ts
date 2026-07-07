@@ -31,6 +31,8 @@ export const defaultCaptionJobConfig: CaptionJobConfig = {
           qtype: 'float8',
           quantize: false,
           low_vram: false,
+          compile: false,
+          caption_extension: 'txt',
         },
       },
     ],

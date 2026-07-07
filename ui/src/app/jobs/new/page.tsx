@@ -227,14 +227,13 @@ export default function TrainingForm() {
   return (
     <>
       <TopBar>
-        <div>
-          <Button className="text-gray-500 dark:text-gray-300 px-3 mt-1" onClick={() => history.back()}>
+        <div className="flex-shrink-0">
+          <Button className="text-gray-500 dark:text-gray-300 px-2 sm:px-3 mt-1" onClick={() => history.back()}>
             <FaChevronLeft />
           </Button>
         </div>
-        <div>
-          {/* 标题在移动端缩小并截断，避免溢出 */}
-          <h1 className="text-base sm:text-lg truncate max-w-[50vw] sm:max-w-none">
+        <div className="flex-shrink-0">
+          <h1 className="text-base sm:text-lg truncate max-w-[120px] sm:max-w-none">
             {runId ? '编辑训练任务' : '新建训练任务'}
           </h1>
         </div>
@@ -249,16 +248,16 @@ export default function TrainingForm() {
                 options={gpuList.map((gpu: any) => ({ value: `${gpu.index}`, label: `GPU #${gpu.index}` }))}
               />
             </div>
-            <div className="mx-4 bg-gray-200 dark:bg-gray-800 w-1 h-6"></div>
-            <div>
+            <div className="hidden md:block mx-4 bg-gray-200 dark:bg-gray-800 w-1 h-6"></div>
+            <div className="hidden md:block">
               <Button
-                className="text-gray-200 bg-gray-800 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
+                className="text-gray-200 bg-gray-800 px-3 py-1 rounded-md"
                 onClick={handleImportConfig}
               >
                 导入配置
               </Button>
             </div>
-            <div className="mx-4 bg-gray-200 dark:bg-gray-800 w-1 h-6"></div>
+            <div className="hidden md:block mx-4 bg-gray-200 dark:bg-gray-800 w-1 h-6"></div>
           </>
         )}
         {!showAdvancedView && (
@@ -296,22 +295,30 @@ export default function TrainingForm() {
           </>
         )}
 
-        <div className="pr-2">
+        <div className="pr-1 sm:pr-2 flex-shrink-0">
           <Button
             // 切换视图按钮：移动端缩小字号与内边距并保持不换行
             className="text-gray-200 bg-gray-800 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
             onClick={() => setShowAdvancedView(!showAdvancedView)}
           >
-            {showAdvancedView ? '显示简易视图' : '显示高级视图'}
+            <span className="sm:hidden">{showAdvancedView ? '简易' : '高级'}</span>
+            <span className="hidden sm:inline">{showAdvancedView ? '显示简易视图' : '显示高级视图'}</span>
           </Button>
         </div>
-        <div>
+        <div className="flex-shrink-0">
           <Button
-            className="text-white bg-green-600 hover:bg-green-700 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md whitespace-nowrap"
+            className="text-white bg-green-600 hover:bg-green-700 px-2 sm:px-3 py-1 rounded-md text-xs sm:text-base"
             onClick={() => saveJob()}
             disabled={status === 'saving'}
           >
-            {status === 'saving' ? '保存中...' : runId ? '更新任务' : '创建任务'}
+            {status === 'saving' ? (
+              '保存中...'
+            ) : (
+              <>
+                <span className="sm:hidden">{runId ? '更新' : '创建'}</span>
+                <span className="hidden sm:inline">{runId ? '更新任务' : '创建任务'}</span>
+              </>
+            )}
           </Button>
         </div>
       </TopBar>

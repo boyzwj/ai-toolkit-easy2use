@@ -12,14 +12,48 @@
 - 支持图像、视频、音频模型，以及编辑 / instruction 类模型。
 - 提供命令行（CLI）与 Web 用户界面（UI），上手门槛低同时功能完备。
 - 本仓库持续跟进上游更新，同时保留中文文档、中文 UI 和更贴近中文用户的使用体验。
+### 图像模型（上游支持）
+- [black-forest-labs/FLUX.1-dev](https://huggingface.co/black-forest-labs/FLUX.1-dev) (FLUX.1)
+- [black-forest-labs/FLUX.2-dev](https://huggingface.co/black-forest-labs/FLUX.2-dev) (FLUX.2)
+- [black-forest-labs/FLUX.2-klein-base-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-base-4B) (FLUX.2-klein-base-4B)
+- [black-forest-labs/FLUX.2-klein-base-9B](https://huggingface.co/black-forest-labs/FLUX.2-klein-base-9B) (FLUX.2-klein-base-9B)
+- [ostris/Flex.1-alpha](https://huggingface.co/ostris/Flex.1-alpha) (Flex.1)
+- [ostris/Flex.2-preview](https://huggingface.co/ostris/Flex.2-preview) (Flex.2)
+- [lodestones/Chroma1-Base](https://huggingface.co/lodestones/Chroma1-Base) (Chroma)
+- [Alpha-VLLM/Lumina-Image-2.0](https://huggingface.co/Alpha-VLLM/Lumina-Image-2.0) (Lumina2)
+- [Qwen/Qwen-Image](https://huggingface.co/Qwen/Qwen-Image) (Qwen-Image)
+- [Qwen/Qwen-Image-2512](https://huggingface.co/Qwen/Qwen-Image-2512) (Qwen-Image-2512)
+- [HiDream-ai/HiDream-I1-Full](https://huggingface.co/HiDream-ai/HiDream-I1-Full) (HiDream I1)
+- [OmniGen2/OmniGen2](https://huggingface.co/OmniGen2/OmniGen2) (OmniGen2)
+- [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) (Z-Image Turbo)
+- [Tongyi-MAI/Z-Image](https://huggingface.co/Tongyi-MAI/Z-Image) (Z-Image)
+- [ostris/Z-Image-De-Turbo](https://huggingface.co/ostris/Z-Image-De-Turbo) (Z-Image De-Turbo)
+- [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) (SDXL)
+- [stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) (SD 1.5)
+- [baidu/ERNIE-Image](https://huggingface.co/baidu/ERNIE-Image) (ERNIE-Image)
+- [NucleusAI/Nucleus-Image](https://huggingface.co/NucleusAI/Nucleus-Image) (Nucleus-Image)
+- [HiDream-ai/HiDream-O1-Image](https://huggingface.co/HiDream-ai/HiDream-O1-Image) (HiDream O1)
+- [Photoroom/prxpixel-t2i](https://huggingface.co/Photoroom/prxpixel-t2i) (PRXPixel)
 
 ## 当前支持概览
 
-- 图像：FLUX.1 / FLUX.2 / FLUX.2 Klein / Qwen-Image / Qwen-Image-2512 / HiDream-O1 / Z-Image / SDXL / SD1.5 / ERNIE-Image / Nucleus-Image 等
-- 编辑：Qwen-Image-Edit / Qwen-Image-Edit-2509 / Qwen-Image-Edit-2511 / HiDream E1 / FireRed-Image-Edit-1.1 预设
+- 图像：FLUX.1 / FLUX.2 / FLUX.2 Klein / Flex.1 / Flex.2 / Chroma / Lumina2 / Qwen-Image / Qwen-Image-2512 / HiDream I1 / HiDream-O1 / Z-Image / Z-Image Turbo / Z-Image De-Turbo / Z-Image L2P / SDXL / SD1.5 / ERNIE-Image / Nucleus-Image / PRX Pixel / Ideogram 4 等
+- 编辑：Qwen-Image-Edit / Qwen-Image-Edit-2509 / Qwen-Image-Edit-2511 / HiDream E1 / FireRed-Image-Edit-1.1 / Krea 2 Edit / Boogu Image Edit 等
 - 视频：Wan 2.x / LTX-2 / LTX-2.3 / Sulphur-2（复用 LTX-2.3 架构预设）等
 - 音频：ACE-Step 1.5 / ACE-Step 1.5 XL
-- 实验性：Zeta-Chroma 等
+- 实验性：Zeta-Chroma / Ideogram 4 / Boogu Image / Krea 2 / PRX Pixel 等
+
+### 视频模型（上游支持）
+- [Wan-AI/Wan2.1-T2V-1.3B-Diffusers](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers) (Wan 2.1 1.3B)
+- [Wan-AI/Wan2.1-I2V-14B-480P-Diffusers](https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P-Diffusers) (Wan 2.1 I2V 14B-480P)
+- [Wan-AI/Wan2.1-I2V-14B-720P-Diffusers](https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-720P-Diffusers) (Wan 2.1 I2V 14B-720P)
+- [Wan-AI/Wan2.1-T2V-14B-Diffusers](https://huggingface.co/Wan-AI/Wan2.1-T2V-14B-Diffusers) (Wan 2.1 14B)
+- [Wan-AI/Wan2.2-T2V-A14B-Diffusers](https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B-Diffusers) (Wan 2.2 14B)
+- [Wan-AI/Wan2.2-I2V-A14B-Diffusers](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B-Diffusers) (Wan 2.2 I2V 14B)
+- [Wan-AI/Wan2.2-TI2V-5B-Diffusers](https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B-Diffusers) (Wan 2.2 TI2V 5B)
+- [Lightricks/LTX-2](https://huggingface.co/Lightricks/LTX-2) (LTX-2)
+- [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) (LTX-2.3)
+- [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw) (Krea 2)
 
 ## 环境要求
 
@@ -28,6 +62,10 @@
 - Python 虚拟环境
 - Node.js >= 20（运行 Web UI）
 - NVIDIA GPU（按训练任务准备足够显存）
+
+### 实验性模型
+- [lodestones/Zeta-Chroma](https://huggingface.co/lodestones/Zeta-Chroma) (Zeta Chroma)
+- [ideogram-ai/ideogram-4-fp8](https://huggingface.co/ideogram-ai/ideogram-4-fp8) (Ideogram 4 FP8)
 
 ### Mac Apple Silicon
 
@@ -175,6 +213,12 @@ $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
 
 打标弹窗中的配置会自动保存到数据库，关闭后重新打开可恢复上次填写的内容，避免重复输入。
 
+### Ostris Cloud
+
+上游 README 新增了 [Ostris Cloud](https://cloud.ostris.com) 说明：这是 Ostris 运营的云 GPU 服务，可用于租用 GPU 运行 AI Toolkit；相关收入会反哺上游项目开发。
+
+<a href="https://cloud.ostris.com" target="_blank"><img src="https://cloud.ostris.com/api/og" alt="Ostris Cloud" style="max-width:100%;width:600px;height:auto;"></a>
+
 ## 近期已并入的重要上游能力
 
 - **新增 HiDream-O1 微调支持**（`hidream_o1`）：集成官方流水线、训练配置与 LoRA 加载，适配 Comfy 兼容格式。
@@ -242,3 +286,38 @@ $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
 ## 许可证
 
 本仓库遵循原项目的许可证政策。请在商用或分发前，额外确认模型、数据集和第三方依赖各自的许可证要求。
+
+## 上游补充说明
+
+### 数据集准备
+
+数据集通常是图片与同名 caption 文本文件组成的文件夹，例如 `image2.jpg` 与 `image2.txt`。caption 文件可以包含 `[trigger]` 占位符，若训练配置中设置了 `trigger_word`，训练时会自动替换。图片无需手动裁剪或统一尺寸，loader 会按 bucket 规则自动缩放和分桶。
+
+### 指定层训练
+
+LoRA 网络可通过 `network_kwargs.only_if_contains` 只训练指定层，也可通过 `network_kwargs.ignore_if_contains` 排除指定层；两者同时命中时，`ignore_if_contains` 优先。层名遵循 diffusers state dict 命名。
+
+```yaml
+network:
+  type: "lora"
+  linear: 128
+  linear_alpha: 128
+  network_kwargs:
+    only_if_contains:
+      - "transformer.single_transformer_blocks."
+```
+
+### LoKr 训练
+
+LoKr 仍沿用常规训练配置，只需要把 network type 改为 `lokr` 并设置对应参数：
+
+```yaml
+network:
+  type: "lokr"
+  lokr_full_rank: true
+  lokr_factor: 8
+```
+
+### 支持上游
+
+如需支持原项目持续开发，可参考上游赞助页：[Ostris Sponsors](https://ostris.com/sponsors)。
