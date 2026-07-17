@@ -61,13 +61,14 @@ config:
         # will probably need this if gpu supports it for omnigen2, other dtypes may not work correctly
         dtype: bf16
       model:
-        name_or_path: "OmniGen2/OmniGen2
+        name_or_path: "OmniGen2/OmniGen2"
         arch: "omnigen2"
         quantize_te: true  # quantize_only te
         # quantize: true  # quantize transformer
       sample:
         sampler: "flowmatch" # must match train.noise_scheduler
         sample_every: 250 # sample every this many steps
+        sample_start_step: 0 # start sampling at this step
         width: 1024
         height: 1024
         prompts:

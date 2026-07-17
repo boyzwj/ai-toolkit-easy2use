@@ -171,6 +171,7 @@ export default async function startJob(jobID: string) {
     data: {
       status: 'running',
       stop: false,
+      return_to_queue: false,
       info: 'Starting job...',
     },
   });
