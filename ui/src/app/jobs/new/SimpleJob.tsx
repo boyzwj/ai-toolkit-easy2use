@@ -23,7 +23,8 @@ import {
   CreatableSelectInput,
 } from '@/components/formInputs';
 import Card from '@/components/Card';
-import { X, Copy, Wand2, SquareDashed } from 'lucide-react';
+import { X, Copy, Wand2, SquareDashed, Info } from 'lucide-react';
+import { openDoc } from '@/components/DocModal';
 import { openUpsamplePromptsModal, toAspectRatio } from '@/components/UpsamplePromptsModal';
 import { openPromptBoxEditor } from '@/components/PromptBoxEditorModal';
 import AddSingleImageModal, { openAddImageModal } from '@/components/AddSingleImageModal';
@@ -199,6 +200,8 @@ export default function SimpleJob({
 
   const showGPUSelect = !isMac();
 
+  const validationConfig = jobConfig.config.process[0].train.validation_config;
+
   let numDatasetCols = 4;
   let numSampleTopCols = 4;
   let datasetStyleClass = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6';
@@ -335,6 +338,56 @@ export default function SimpleJob({
                 }}
                 placeholder=""
               />
+            )}
+            {modelArch?.gateUrl && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const gateUrl = modelArch.gateUrl as string;
+                    openDoc({
+                      title: '受限模型',
+                      description: (
+                        <div className="space-y-3">
+                          <p>该模型在 Hugging Face 上受访问限制。使用前，请先在模型页面接受相关条款：</p>
+                          <p>
+                            <a
+                              href={gateUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300 underline"
+                            >
+                              {gateUrl}
+                            </a>
+                          </p>
+                          <p>
+                            你还需要创建一个 Hugging Face{' '}
+                            <a
+                              href="https://huggingface.co/settings/tokens"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300 underline"
+                            >
+                              只读令牌
+                            </a>{' '}
+                            ，并在{' '}
+                            <a href="/settings" className="text-blue-400 hover:text-blue-300 underline">
+                              设置页面
+                            </a>
+                            中添加该令牌。
+                          </p>
+                        </div>
+                      ),
+                    });
+                  }}
+                  className="w-full flex items-center gap-2 rounded-md bg-blue-950/60 border border-blue-800 px-3 py-2 text-sm text-blue-200 hover:bg-blue-900/60 text-left"
+                >
+                  <Info className="w-4 h-4 shrink-0 text-blue-400" />
+                  <span>
+                    受限模型。<span className="underline">了解详情</span>
+                  </span>
+                </button>
+              </div>
             )}
             {modelArch?.additionalSections?.includes('model.low_vram') && (
               <FormGroup label="选项">
@@ -908,7 +961,135 @@ export default function SimpleJob({
           </Card>
         </div>
         <div>
-<Card title="高级设置" collapsible>
+          <Card
+            title="验证"
+            toggled={!!validationConfig}
+            onToggle={value => {
+              if (value) {
+                setJobConfig(
+                  {
+                    validation_items: [{ image_path: '', prompt: '' }],
+                    resolution: 1024,
+                    validate_every_n_steps: 1,
+                    validation_sigmas: [0.5],
+                  },
+                  'config.process[0].train.validation_config',
+                );
+              } else {
+                setJobConfig(undefined, 'config.process[0].train.validation_config');
+              }
+            }}
+          >
+            {validationConfig && (
+              <>
+                <p className="text-sm text-gray-400 mb-4">
+                  验证会在一组固定图像上执行稳定的损失检查。每张图像仅在启动时编码一次，并使用固定随机种子在指定
+                  Sigma 下预测，因此不同训练阶段的结果可以直接比较。每次验证都会将平均损失记录为 val/loss。
+                  验证图像应与训练概念一致，但{' '}
+                  <span className="font-bold text-gray-300">不要把验证图像加入训练数据集</span>。
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <NumberInput
+                    label="验证间隔（步）"
+                    value={validationConfig.validate_every_n_steps}
+                    onChange={value =>
+                      setJobConfig(value, 'config.process[0].train.validation_config.validate_every_n_steps')
+                    }
+                    placeholder="eg. 10"
+                    min={1}
+                    required
+                  />
+                  <NumberInput
+                    label="验证分辨率"
+                    value={validationConfig.resolution}
+                    onChange={value => setJobConfig(value, 'config.process[0].train.validation_config.resolution')}
+                    placeholder="eg. 512"
+                    min={64}
+                    required
+                  />
+                  <SelectInput
+                    label="验证 Sigma"
+                    value={(validationConfig.validation_sigmas ?? [1.0, 0.75, 0.5, 0.25]).join(', ')}
+                    onChange={value =>
+                      setJobConfig(
+                        value.split(',').map((v: string) => parseFloat(v)),
+                        'config.process[0].train.validation_config.validation_sigmas',
+                      )
+                    }
+                    options={[
+                      { value: '0.5', label: '0.5' },
+                      { value: '1, 0.5', label: '1.0, 0.5' },
+                      { value: '1, 0.66, 0.33', label: '1.0, 0.66, 0.33' },
+                      { value: '1, 0.75, 0.5, 0.25', label: '1.0, 0.75, 0.5, 0.25' },
+                    ]}
+                  />
+                </div>
+                <div className="mt-4">
+                  <label className="block text-xs text-gray-300 mb-2">
+                    验证图像（{validationConfig.validation_items.length}）
+                  </label>
+                  {validationConfig.validation_items.map((item, i) => (
+                    <div key={i} className="rounded-lg pl-4 pr-1 py-3 mb-4 bg-gray-950">
+                      <div className="flex items-center space-x-4">
+                        <SampleControlImage
+                          instruction="添加图像"
+                          src={item.image_path === '' ? null : item.image_path}
+                          onNewImageSelected={imagePath => {
+                            setJobConfig(
+                              imagePath ?? '',
+                              `config.process[0].train.validation_config.validation_items[${i}].image_path`,
+                            );
+                          }}
+                        />
+                        <div className="flex-1">
+                          <TextInput
+                            label="提示词"
+                            value={item.prompt}
+                            onChange={value =>
+                              setJobConfig(
+                                value,
+                                `config.process[0].train.validation_config.validation_items[${i}].prompt`,
+                              )
+                            }
+                            placeholder="输入提示词"
+                          />
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setJobConfig(
+                                validationConfig.validation_items.filter((_, index) => index !== i),
+                                'config.process[0].train.validation_config.validation_items',
+                              )
+                            }
+                            className="rounded-full p-1 text-sm"
+                          >
+                            <X />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setJobConfig(
+                        [...validationConfig.validation_items, { image_path: '', prompt: '' }],
+                        'config.process[0].train.validation_config.validation_items',
+                      )
+                    }
+                    className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                  >
+                    添加验证图像
+                  </button>
+                </div>
+              </>
+            )}
+          </Card>
+        </div>
+        <div>
+          <Card title="高级设置" collapsible>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div>
                 <Checkbox
