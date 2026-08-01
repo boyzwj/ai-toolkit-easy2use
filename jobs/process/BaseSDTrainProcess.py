@@ -76,6 +76,7 @@ import hashlib
 from toolkit.util.blended_blur_noise import get_blended_blur_noise
 from toolkit.util.get_model import get_model_class
 from toolkit.basic import flush
+from toolkit.flowmatch_utils import resolve_flowmatch_patch_size
 
 
 class BaseSDTrainProcess(BaseTrainProcess):
@@ -1199,12 +1200,7 @@ class BaseSDTrainProcess(BaseTrainProcess):
                         num_train_timesteps = self.train_config.next_sample_timesteps
                         timestep_type = 'shift'
                     
-                    patch_size = 1
-                    if self.sd.is_flux or 'flex' in self.sd.arch:
-                        # flux is a patch size of 1, but latents are divided by 2, so we need to double it
-                        patch_size = 2
-                    elif hasattr(self.sd.unet, 'config') and hasattr(self.sd.unet.config, 'patch_size'):
-                        patch_size = self.sd.unet.config.patch_size
+                    patch_size = resolve_flowmatch_patch_size(self.sd)
                     
                     self.sd.noise_scheduler.set_train_timesteps(
                         num_train_timesteps,

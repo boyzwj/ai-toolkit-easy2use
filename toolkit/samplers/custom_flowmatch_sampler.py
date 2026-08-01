@@ -144,7 +144,7 @@ class CustomFlowMatchEulerDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
                 if latents is None:
                     raise ValueError('latents is None')
 
-                # for flux we double up the patch size before sending her to simulate the latent reduction
+                # Convert the latent grid to the transformer's image-token count.
                 h = latents.shape[2]
                 w = latents.shape[3]
                 image_seq_len = h * w // (patch_size**2)
