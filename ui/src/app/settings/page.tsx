@@ -123,6 +123,24 @@ export default function Settings() {
                     ]}
                   />
                 </div>
+
+                <div>
+                  <label htmlFor="MODELS_PATH" className="block text-sm font-medium mb-2">
+                    模型目录路径
+                    <div className="text-gray-500 text-sm ml-1">
+                      部分模型支持直接加载 ComfyUI 模型权重，它们会从此目录加载或下载到此目录。必须填写绝对路径；留空时默认使用项目根目录下的 models 文件夹。
+                    </div>
+                  </label>
+                  <input
+                    type="text"
+                    id="MODELS_PATH"
+                    name="MODELS_PATH"
+                    value={settings.MODELS_PATH}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                    placeholder="输入模型目录的绝对路径"
+                  />
+                </div>
               </div>
             </div>
           </div>

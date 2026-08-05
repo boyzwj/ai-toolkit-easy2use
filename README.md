@@ -71,6 +71,7 @@
 - [Wan-AI/Wan2.2-TI2V-5B-Diffusers](https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B-Diffusers) (Wan 2.2 TI2V 5B)
 - [Lightricks/LTX-2](https://huggingface.co/Lightricks/LTX-2) (LTX-2)
 - [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) (LTX-2.3)
+- [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) (MiniMaxAI/MiniMax-H3)
 
 ## 环境要求
 
@@ -82,6 +83,37 @@
 
 ### 实验性模型
 - [lodestones/Zeta-Chroma](https://huggingface.co/lodestones/Zeta-Chroma) (Zeta Chroma)
+
+### AI Toolkit Manager（实验性）
+
+推荐使用仓库内置的 **AI Toolkit Manager** 安装和启动。Manager 会检测硬件、创建 Python 环境、选择合适的 PyTorch，并在项目目录内准备 Node.js 与 FFmpeg，不会全局安装这些依赖。每次启动时它还会检查更新；如果检测到未提交的本地修改，则会跳过自动更新并给出提示，随后在 `http://localhost:8675` 启动 Web UI。
+
+目前 Manager 仍是实验性功能。首次使用前只需安装 Git，然后按平台运行：
+
+Linux：
+
+```bash
+chmod +x run_linux.sh
+./run_linux.sh
+```
+
+macOS（Apple Silicon，实验性）：
+
+```bash
+chmod +x run_mac.zsh
+./run_mac.zsh
+```
+
+Windows：双击 `run_windows.bat`，或在终端中运行它。
+
+也可以直接使用命令行，适合无桌面的服务器：
+
+```bash
+python3 -m manager install   # 首次安装
+python3 -m manager update    # 拉取更新并同步依赖
+python3 -m manager launch    # 启动 Web UI
+python3 -m manager doctor    # 诊断环境问题
+```
 
 ### Mac Apple Silicon
 

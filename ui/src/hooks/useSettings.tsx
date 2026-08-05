@@ -8,6 +8,7 @@ export interface Settings {
   TRAINING_FOLDER: string;
   DATASETS_FOLDER: string;
   MODEL_SOURCE: string;
+  MODELS_PATH: string;
 }
 
 export default function useSettings() {
@@ -16,6 +17,7 @@ export default function useSettings() {
     TRAINING_FOLDER: '',
     DATASETS_FOLDER: '',
     MODEL_SOURCE: 'huggingface',
+    MODELS_PATH: '',
   });
   const [isSettingsLoaded, setIsLoaded] = useState(false);
   useEffect(() => {
@@ -29,6 +31,7 @@ export default function useSettings() {
           TRAINING_FOLDER: data.TRAINING_FOLDER || '',
           DATASETS_FOLDER: data.DATASETS_FOLDER || '',
           MODEL_SOURCE: data.MODEL_SOURCE || 'huggingface',
+          MODELS_PATH: data.MODELS_PATH || '',
         });
         setIsLoaded(true);
       })
