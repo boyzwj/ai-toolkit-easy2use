@@ -70,11 +70,10 @@ const Sidebar = () => {
       window.dispatchEvent(new CustomEvent('aitk:sidebarState', { detail: { collapsed } }));
     };
     const toggle = () => {
-      setIsMobileOpen(open => {
-        const next = !open;
-        emitState(next);
-        return next;
-      });
+      // setIsMobileOpen only accepts a plain boolean (not a functional update)
+      const next = !isMobileOpen;
+      setIsMobileOpen(next);
+      emitState(next);
     };
     const onRequest = () => emitState(isMobileOpen);
 

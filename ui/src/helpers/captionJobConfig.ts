@@ -12,6 +12,7 @@ export const defaultCaptionJobConfig: CaptionJobConfig = {
     process: [
       {
         type: 'RemoteAPICaptioner',
+        sqlite_db_path: './aitk_db.db',
         device: 'cuda',
         caption: {
           model_name_or_path: '',
@@ -33,6 +34,7 @@ export const defaultCaptionJobConfig: CaptionJobConfig = {
           low_vram: false,
           compile: false,
           caption_extension: 'txt',
+          batch_size: 1,
         },
       },
     ],
