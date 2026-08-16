@@ -69,14 +69,18 @@ config:
         name_or_path: "~/models/Sulphur-2-base/sulphur_distil_bf16.safetensors"
         # This suffix is intentional: backend strips ':sulphur' and uses the existing LTX-2.3 class.
         arch: 'ltx2.3:sulphur'
-        # Optional local ComfyUI text encoder. If omitted, toolkit uses its LTX-2.3 Gemma default and may download it.
-        te_name_or_path: "~/models/gemma_3_12B_it_fp4_mixed.safetensors"
+        # Optional text encoder repo or local folder. Omit this to use the LTX-2.3 Gemma default.
+        # NVFP4 ComfyUI Gemma single-file safetensors are not supported by the current converter.
+        # te_name_or_path: "Lightricks/gemma-3-12b-it-qat-q4_0-unquantized"
         quantize: true
         qtype: "qfloat8"
         # Do not additionally quantize the text encoder for identity LoRA; face/identity training is sensitive to TE changes.
         quantize_te: false
         qtype_te: "qfloat8"
         low_vram: true
+        layer_offloading: true
+        layer_offloading_text_encoder_percent: 1.0
+        layer_offloading_transformer_percent: 1.0
 
       sample:
         sampler: "flowmatch"

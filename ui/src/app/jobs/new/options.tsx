@@ -876,10 +876,13 @@ export const modelArchs: ModelArch[] = [
     defaults: {
       // Use the bf16 Sulphur checkpoint for training. The fp8 checkpoint is intended for inference.
       'config.process[0].model.name_or_path': ['~/models/Sulphur-2-base/sulphur_distil_bf16.safetensors', defaultNameOrPath],
-      'config.process[0].model.te_name_or_path': ['~/models/gemma_3_12B_it_fp4_mixed.safetensors', undefined],
+      'config.process[0].model.te_name_or_path': [undefined, undefined],
       'config.process[0].model.quantize': [true, false],
       'config.process[0].model.quantize_te': [false, false],
       'config.process[0].model.low_vram': [true, false],
+      'config.process[0].model.layer_offloading': [true, false],
+      'config.process[0].model.layer_offloading_text_encoder_percent': [1.0, 1.0],
+      'config.process[0].model.layer_offloading_transformer_percent': [1.0, 1.0],
       'config.process[0].network.linear': [16, defaultLinearRank],
       'config.process[0].network.linear_alpha': [16, defaultLinearRank],
       'config.process[0].save.save_every': [300, 250],
@@ -887,6 +890,7 @@ export const modelArchs: ModelArch[] = [
       'config.process[0].train.lr': [1e-4, 1e-4],
       'config.process[0].train.train_text_encoder': [false, false],
       'config.process[0].train.cache_text_embeddings': [true, false],
+      'config.process[0].train.diff_output_preservation': [false, false],
       'config.process[0].sample.sampler': ['flowmatch', 'flowmatch'],
       'config.process[0].train.noise_scheduler': ['flowmatch', 'flowmatch'],
       'config.process[0].sample.num_frames': [1, 1],

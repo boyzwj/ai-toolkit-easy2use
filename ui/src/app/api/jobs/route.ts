@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/server/prisma';
 import { isMac } from '@/helpers/basic';
 import { cached } from '@/server/apiCache';
+import { sanitizeJobConfigForSave } from '../../../../shared/jobConfigSanitizers';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { id, name, job_config } = body;
+    const sanitizedJobConfig = sanitizeJobConfigForSave(job_config);
     let gpu_ids: string = body.gpu_ids;
 
     if (isMac()) {
@@ -81,7 +83,7 @@ export async function POST(request: Request) {
         data: {
           name,
           gpu_ids,
-          job_config: JSON.stringify(job_config),
+          job_config: JSON.stringify(sanitizedJobConfig),
           ...extra,
         },
       });
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
         data: {
           name,
           gpu_ids,
-          job_config: JSON.stringify(job_config),
+          job_config: JSON.stringify(sanitizedJobConfig),
           queue_position: newQueuePosition,
           ...extra,
         },

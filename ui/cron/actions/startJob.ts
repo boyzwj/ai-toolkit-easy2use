@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { TOOLKIT_ROOT, getTrainingFolder, getHFToken, getModelSource, getModelsPath } from '../paths';
 import { resolveDetachedPythonPath } from '../pythonPath';
+import { sanitizeJobConfigForSave } from '../../shared/jobConfigSanitizers';
 const isWindows = process.platform === 'win32';
 
 const appendJobLog = (logPath: string, message: string) => {
@@ -215,8 +216,15 @@ const startAndWatchJob = (job: Job) => {
     }
 
     // update the config dataset path
-    const jobConfig = JSON.parse(job.job_config);
+    const jobConfig = sanitizeJobConfigForSave(JSON.parse(job.job_config));
     jobConfig.config.process[0].sqlite_db_path = path.join(TOOLKIT_ROOT, 'aitk_db.db');
+    const sanitizedJobConfigString = JSON.stringify(jobConfig);
+    if (sanitizedJobConfigString !== job.job_config) {
+      await prisma.job.update({
+        where: { id: jobID },
+        data: { job_config: sanitizedJobConfigString },
+      });
+    }
 
     // write the config file
     fs.writeFileSync(configPath, JSON.stringify(jobConfig, null, 2));

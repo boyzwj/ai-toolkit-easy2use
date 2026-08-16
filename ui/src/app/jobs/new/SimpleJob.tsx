@@ -308,7 +308,7 @@ export default function SimpleJob({
                   }
                   setJobConfig(value, 'config.process[0].model.te_name_or_path');
                 }}
-                placeholder="~/models/gemma_3_12B_it_fp4_mixed.safetensors"
+                placeholder="Lightricks/gemma-3-12b-it-qat-q4_0-unquantized"
               />
             )}
             {modelArch?.additionalSections?.includes('model.assistant_lora_path') && (
@@ -889,6 +889,7 @@ export default function SimpleJob({
                       setJobConfig(value, 'config.process[0].train.cache_text_embeddings');
                       if (value) {
                         setJobConfig(false, 'config.process[0].train.unload_text_encoder');
+                        setJobConfig(false, 'config.process[0].train.diff_output_preservation');
                       }
                     }}
                   />
@@ -913,6 +914,9 @@ export default function SimpleJob({
                         if (value && jobConfig.config.process[0].train.blank_prompt_preservation) {
                           // only one can be enabled at a time
                           setJobConfig(false, 'config.process[0].train.blank_prompt_preservation');
+                        }
+                        if (value && jobConfig.config.process[0].train.cache_text_embeddings) {
+                          setJobConfig(false, 'config.process[0].train.cache_text_embeddings');
                         }
                       }}
                     />
