@@ -198,3 +198,4 @@ tmp/
 ui/prisma/database.db
 original_repo
 .next
+testing/.model_test_outputs
