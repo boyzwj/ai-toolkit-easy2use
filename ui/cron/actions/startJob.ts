@@ -226,6 +226,15 @@ const startAndWatchJob = (job: Job) => {
       });
     }
 
+    if (job.job_type === 'inference') {
+      // the engine publishes engine.json (endpoint + token) and writes its
+      // outputs under the job folder, which the UI proxy/file routes know
+      jobConfig.config.process[0].engine = {
+        ...(jobConfig.config.process[0].engine || {}),
+        job_folder: trainingFolder,
+      };
+    }
+
     // write the config file
     fs.writeFileSync(configPath, JSON.stringify(jobConfig, null, 2));
 
