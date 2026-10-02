@@ -317,12 +317,6 @@ $env:AI_TOOLKIT_AUTH="your_token"; npm run build_and_start
 - 这是一份 ai-toolkit 风格预设，不是 FireRed 原仓 `train_lora.sh` 的逐项复刻；未直接映射的 FireRed 专属训练参数继续沿用 ai-toolkit 现有机制。
 - 推荐优先从示例配置 `config/examples/train_lora_firered_image_edit_1_1_32gb.yaml` 启动，再按你的显存和数据集情况微调。
 
-## 扩展文档
-
-本仓库补充的专题调研文档，放在 [`docs/`](docs/) 目录：
-
-- [MiniMax-H3 人物 LoRA 训练调研报告](docs/minimax_h3_character_lora_training.md)：H3 人物一致性 LoRA 的可行路线选择、数据集硬约束、坑点清单，以及 DiffSynth NF4 单卡路线的实操步骤。
-
 ## 常见问题（FAQ）
 
 - 显存不足如何处理？
