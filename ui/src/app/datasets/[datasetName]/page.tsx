@@ -27,6 +27,11 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
   const [selectedImgPath, setSelectedImgPath] = useState<string | null>(null);
   const [captionExt, setCaptionExt] = useState<string>('txt');
   const [captionRefreshKeys, setCaptionRefreshKeys] = useState<Record<string, number>>({});
+  const [captionRevision, setCaptionRevision] = useState(0);
+  const refreshCaptions = useCallback(() => setCaptionRevision(prev => prev + 1), []);
+  const handleCaptionSaved = useCallback((path: string) => {
+    setCaptionRefreshKeys(prev => ({ ...prev, [path]: (prev[path] || 0) + 1 }));
+  }, []);
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
   const [captionBarHeight, setCaptionBarHeight] = useState(0);
   const scrollParentCallback = useCallback((el: HTMLDivElement | null) => setScrollParent(el), []);
@@ -149,6 +154,7 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
           <AutoCaptionButton
             datasetPath={`${pathJoin(settings.DATASETS_FOLDER, datasetName)}`}
             setIsAutoCaptioning={setIsAutoCaptioning}
+            onCaptionsUpdated={refreshCaptions}
             captionExt={captionExt}
           />
           <Button
@@ -184,7 +190,7 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
                   imageUrl={img.img_path}
                   onDelete={() => refreshImageList(datasetName)}
                   onImageClick={() => setSelectedImgPath(img.img_path)}
-                  captionRefreshKey={captionRefreshKeys[img.img_path] || 0}
+                  captionRefreshKey={captionRevision + (captionRefreshKeys[img.img_path] || 0)}
                   observerRoot={scrollParent}
                   captionExt={captionExt}
                 />
@@ -209,7 +215,7 @@ export default function DatasetPage({ params }: { params: { datasetName: string 
         imageList={imgPaths}
         onChange={setSelectedImgPath}
         refreshImages={() => refreshImageList(datasetName)}
-        onCaptionSaved={path => setCaptionRefreshKeys(prev => ({ ...prev, [path]: (prev[path] || 0) + 1 }))}
+        onCaptionSaved={handleCaptionSaved}
         captionExt={captionExt}
       />
     </>

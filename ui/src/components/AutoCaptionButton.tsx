@@ -8,16 +8,30 @@ import { Loader2 } from 'lucide-react';
 type AutoCaptionButtonProps = {
   datasetPath: string;
   setIsAutoCaptioning?: (isAutoCaptioning: boolean) => void;
+  onCaptionsUpdated?: () => void;
   captionExt?: string;
 };
 
-export default function AutoCaptionButton({ datasetPath, setIsAutoCaptioning, captionExt }: AutoCaptionButtonProps) {
+export default function AutoCaptionButton({
+  datasetPath,
+  setIsAutoCaptioning,
+  onCaptionsUpdated,
+  captionExt,
+}: AutoCaptionButtonProps) {
   const { job, status, refreshJob } = useJobByRef(datasetPath, 5000);
   useEffect(() => {
     if (setIsAutoCaptioning) {
       setIsAutoCaptioning(!!(job && job.status === 'running'));
     }
   }, [job, setIsAutoCaptioning]);
+
+  // Also refresh if the page missed the running state (e.g. a short job or a
+  // tab reopened after completion). Unchanged polls must not refresh the grid.
+  useEffect(() => {
+    if (job && job.status !== 'running' && job.status !== 'queued') {
+      onCaptionsUpdated?.();
+    }
+  }, [job?.id, job?.status, job?.step, onCaptionsUpdated]);
 
   if (job && (job.status === 'running' || job.status === 'queued')) {
     return (

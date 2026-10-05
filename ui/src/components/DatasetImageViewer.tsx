@@ -7,6 +7,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import classNames from 'classnames';
 import { openConfirm } from './ConfirmModal';
 import { apiClient } from '@/utils/api';
+import { setCachedCaption } from '@/hooks/useCaptionBatch';
 import { isVideo, isAudio, encodeFilePathForUrl } from '@/utils/basic';
 import AudioPlayer from './AudioPlayer';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -109,6 +110,7 @@ export default function DatasetImageViewer({
       apiClient
         .post('/api/img/caption', { imgPath: path, caption: trimmed, ext: captionExt })
         .then(() => {
+          setCachedCaption(path, trimmed, captionExt);
           if (currentImgPathRef.current === path) {
             setSavedCaption(trimmed);
           }
@@ -169,6 +171,7 @@ export default function DatasetImageViewer({
       .then(data => {
         if (controller.signal.aborted) return;
         const text = typeof data === 'string' ? data : data ? `${data}` : '';
+        setCachedCaption(imgPath, text, captionExt);
         setCaption(text);
         setSavedCaption(text);
         setIsCaptionLoaded(true);
