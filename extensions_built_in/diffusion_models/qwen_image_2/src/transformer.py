@@ -27,8 +27,13 @@ upstream:
     load/quantize/offload path.
 """
 
+import json
 import math
+import os
 from typing import Any
+
+from safetensors import safe_open
+from safetensors.torch import load_file
 
 import torch
 import torch.nn as nn
@@ -970,6 +975,86 @@ class QwenImage21Transformer2DModel(
                 continue
             new_sd[key] = value
         return new_sd
+
+    # ---- diffusers-layout directories (HF / ModelScope snapshots) ----
+
+    @staticmethod
+    def _weights_folder(path, subfolder):
+        """Local folder holding the transformer shards, or None when `path` is
+        not a directory (a hub repo id)."""
+        if not os.path.isdir(path):
+            return None
+        folder = os.path.join(path, subfolder) if subfolder else path
+        if not os.path.isdir(folder):
+            # a checkpoint that nests nothing under the subfolder IS the folder
+            folder = path
+        return folder
+
+    @classmethod
+    def _has_split_mlp(cls, folder) -> bool:
+        """True when the checkpoint ships the split diffusers SwiGLU pair
+        (`img_mlp.gate_layer`/`img_mlp.proj`) instead of the fused
+        `img_mlp.gate_up` this class was built around. Reads only the index /
+        shard headers, never the tensor data."""
+        index = os.path.join(folder, "diffusion_pytorch_model.safetensors.index.json")
+        if os.path.isfile(index):
+            try:
+                with open(index) as f:
+                    keys = json.load(f).get("weight_map", {}).keys()
+                return any(k.endswith(".img_mlp.gate_layer.weight") for k in keys)
+            except (OSError, ValueError):
+                return False
+        for name in sorted(os.listdir(folder)):
+            if not name.endswith(".safetensors"):
+                continue
+            try:
+                with safe_open(os.path.join(folder, name), framework="pt") as f:
+                    return any(
+                        k.endswith(".img_mlp.gate_layer.weight") for k in f.keys()
+                    )
+            except Exception:  # unreadable header: let from_pretrained report
+                return False
+        return False
+
+    @classmethod
+    def aitk_from_pretrained(cls, path, subfolder=None, dtype=None, **kwargs):
+        """`from_pretrained` on a diffusers-layout checkpoint silently drops the
+        split `img_mlp.gate_layer`/`proj` keys (this class wants them fused),
+        leaving every `img_mlp.gate_up` on meta - which only surfaces much
+        later as "Cannot copy out of meta tensor" when the model is moved to a
+        device. Route that layout through the state-dict path, which already
+        knows how to fuse it, and fail loudly instead of half-loading."""
+        dtype = dtype or torch.bfloat16
+        folder = cls._weights_folder(path, subfolder)
+        if folder is not None and cls._has_split_mlp(folder):
+            logger.info(
+                f"{cls.__name__}: diffusers-layout checkpoint in {folder}; "
+                "loading the split img_mlp through the fused-loader path"
+            )
+            state_dict = {}
+            for name in sorted(os.listdir(folder)):
+                if not name.endswith(".safetensors"):
+                    continue
+                file_path = os.path.join(folder, name)
+                cls._readahead(file_path)
+                state_dict.update(load_file(file_path))
+            return cls.load_from_state_dict(
+                state_dict,
+                dtype,
+                config=cls.aitk_load_config(folder),
+            )
+
+        model = super().aitk_from_pretrained(
+            path, subfolder=subfolder, dtype=dtype, **kwargs
+        )
+        leftover = [n for n, p in model.named_parameters() if p.is_meta]
+        if leftover:
+            raise ValueError(
+                f"{cls.__name__} load left {len(leftover)} meta parameters "
+                f"(e.g. {leftover[:4]}): the checkpoint does not match this "
+                "class's key layout."
+            )
+        return model
 
     @register_to_config
     def __init__(

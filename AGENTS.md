@@ -2,6 +2,14 @@
 
 Chinese-localized fork of [ostris/ai-toolkit](https://github.com/ostris/ai-toolkit) for diffusion model training/inference (FLUX, SD, Wan, audio, etc.). Version in `version.py`.
 
+## 修改与部署流程（本地 → GitHub → ai2）
+
+- 代码必须先在本地 `/Users/tom/ws/ai-toolkit-easy2use` 修改、检查并提交，再推送到 GitHub；ai2 的 `/home/tom/ai/ai-toolkit-easy2use` 通过 `git pull --ff-only` 获取更新。
+- 不要直接在 ai2 修改源码，也不要通过复制文件或补丁绕过 Git 部署。ai2 上可以检查日志、运行测试、安装依赖、构建及重启服务。
+- 更新 ai2 前先核对分支、提交和工作区差异。发现历史未提交改动时，先备份并同步到本地，审查后提交、推送；确认改动已保存后再清理对应的远端差异并拉取。
+- 模型权重、数据集、训练输出、数据库、凭据及 `.env` 等机器配置不提交到 GitHub。依赖安装自动产生的锁文件差异应先审查，避免把无关的环境变化作为代码修改提交。
+- 拉取后按下方 UI 更新流程安装依赖、同步数据库并构建。重启前检查训练及打标任务，避免中断正在运行的任务。
+
 ## Entrypoints
 
 - **CLI training**: `python run.py <config-path>` (looks up relative paths under `config/`, or absolute). Supports `-r` (recover on fail), `-n` (name replacement), `-l` (log file).

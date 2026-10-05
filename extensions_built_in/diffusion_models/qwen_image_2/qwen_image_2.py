@@ -173,10 +173,20 @@ class QwenImage2Model(BaseModel):
         )
         flush()
 
-        self.print_and_status_update("Loading text encoder")
+        te_path = self.model_config.te_name_or_path or base_model_path
+        if not self.model_config.te_name_or_path:
+            te_file = os.path.join(base_model_path, "text_encoder", "model.safetensors")
+            if os.path.isfile(te_file):
+                # Single-file encoders may carry Comfy quantization markers;
+                # use the state-dict loader so their layout and buffers are restored.
+                te_path = te_file
+        self.print_and_status_update(f"Loading text encoder from {te_path}")
         processor = QwenImage21TextEncoder.load_processor(base_model_path)
         text_encoder = QwenImage21TextEncoder.load_model(
-            base_model_path, dtype=dtype, subfolder="text_encoder"
+            te_path,
+            dtype=dtype,
+            config_path=base_model_path,
+            subfolder="text_encoder",
         )
         # the vision tower stays: any prompt may carry reference images. bf16
         # Conv3d has no fast kernel, the equivalent GEMM does
@@ -186,9 +196,12 @@ class QwenImage2Model(BaseModel):
         text_encoder.eval()
         flush()
 
-        self.print_and_status_update("Loading VAE")
+        vae_path = self.model_config.vae_path or base_model_path
+        self.print_and_status_update(f"Loading VAE from {vae_path}")
         vae = AutoencoderKLQwenImage21.load(
-            base_model_path, **self.component_load_kwargs("vae")
+            vae_path,
+            config_path=base_model_path,
+            **self.component_load_kwargs("vae"),
         )
         vae.requires_grad_(False)
         vae.eval()
