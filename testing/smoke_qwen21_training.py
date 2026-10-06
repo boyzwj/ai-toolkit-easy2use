@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--profile", default="identity", choices=("fast", "identity", "edit"))
     parser.add_argument("--quantize", action="store_true")
+    parser.add_argument("--optimizer", default="adamw8bit", choices=("adamw", "adamw8bit"))
     parser.add_argument("--resolution", type=int, default=512)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=1)
     args = parser.parse_args()
@@ -52,7 +53,7 @@ def main():
         "model": {"arch": "qwen_image_2", "name_or_path": args.model,
                   "quantize": args.quantize, "qtype": "convrot8", "quantize_te": True, "qtype_te": "convrot8"},
         "network": {"type": "lora"}, "datasets": [ds],
-        "train": {"steps": 3, "batch_size": 1, "optimizer": "adamw",
+        "train": {"steps": 3, "batch_size": 1, "optimizer": args.optimizer,
                   "gradient_accumulation_steps": args.gradient_accumulation_steps,
                   "skip_first_sample": True, "cache_text_embeddings": True, "unload_text_encoder": True,
                   "qwen_image_21": {"profile": args.profile, "memory_plan": "manual", "compile": "off"}},
@@ -90,7 +91,7 @@ def main():
         previous_optimizer_steps = optimizer_steps
         assert all(torch.isfinite(p).all() for p in state["raw_weights"].values()), "Non-finite adapter weights"
         print(f"Validated checkpoint and resume state at step {steps}", flush=True)
-    report = {"output": str(output), "profile": args.profile, "quantize": args.quantize,
+    report = {"output": str(output), "profile": args.profile, "quantize": args.quantize, "optimizer": args.optimizer,
               "steps": 4, "resumed_from": 3, "preview_files": [str(p) for p in checkpoint.parent.rglob("*.jpg")]}
     assert report["preview_files"], "No preview was generated"
     (output / "smoke_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
