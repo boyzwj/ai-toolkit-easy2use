@@ -312,6 +312,9 @@ class QwenImage2Model(BaseModel):
         active = [a.is_active for a in adapters]
         network = self.network
         training = self.model.training
+        rng = torch.get_rng_state()
+        cuda_rng = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+        self.save_device_state()
         network_state = None if network is None else (network.training, network.is_active, network.multiplier)
         if network is not None and self.model_config.model_kwargs.get("split_mlp_lora", False):
             network.can_merge_in = False
@@ -320,12 +323,18 @@ class QwenImage2Model(BaseModel):
                 self.preview_lora.is_active = True
             return super().generate_images(*args, **kwargs)
         finally:
-            for adapter, was_active in zip(adapters, active):
-                adapter.is_active = was_active
-            self.model.train(training)
-            if network is not None:
-                network.train(network_state[0])
-                network.is_active, network.multiplier = network_state[1:]
+            try:
+                self.restore_device_state()
+            finally:
+                torch.set_rng_state(rng)
+                if cuda_rng is not None:
+                    torch.cuda.set_rng_state_all(cuda_rng)
+                for adapter, was_active in zip(adapters, active):
+                    adapter.is_active = was_active
+                self.model.train(training)
+                if network is not None:
+                    network.train(network_state[0])
+                    network.is_active, network.multiplier = network_state[1:]
 
     # ------------------------------------------------------------------
     # VAE. The latents are RGBA. Images without alpha get an opaque one on

@@ -138,6 +138,13 @@ class Qwen21TrainingController:
             if self.options.get("sample_every_epoch", True):
                 trainer.sample_config.sample_every = steps_per_epoch
             trainer.sd.print_and_status_update(f"Qwen 2.1: {self.options['epochs']} epochs, {trainer.train_config.steps} steps")
+        if self.options.get("compile") == "auto":
+            # The real job length is known only now (epochs may override the
+            # UI's generic step count). BaseSDTrainProcess compiles after here.
+            trainer.model_config.compile = (
+                trainer.device_torch.type == "cuda" and trainer.train_config.steps >= 500
+                and not trainer.model_config.layer_offloading)
+            trainer.model_config.block_compile = trainer.model_config.compile
         if trainer.model_config.model_kwargs.get("split_mlp_lora", False):
             self.network.can_merge_in = False
         warm_reference_cache(trainer.sd, datasets)

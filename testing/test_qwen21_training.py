@@ -286,10 +286,13 @@ class AdapterTests(unittest.TestCase):
         preview = SimpleNamespace(is_active=False)
         model.assistant_lora, model.preview_lora = helper, preview
         network.is_active = True
+        rng = torch.get_rng_state()
+        cuda_rng = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
         def fail(*args, **kwargs):
             helper.is_active = False
             network.is_active = False
             model.model.eval()
+            torch.rand(5, device=DEVICE)
             raise torch.OutOfMemoryError("preview")
         with patch.object(BaseModel, "generate_images", fail):
             with self.assertRaises(torch.OutOfMemoryError):
@@ -298,6 +301,11 @@ class AdapterTests(unittest.TestCase):
         self.assertFalse(preview.is_active)
         self.assertTrue(network.is_active)
         self.assertTrue(model.model.training)
+        self.assertIsNone(model.device_state)
+        torch.testing.assert_close(torch.get_rng_state(), rng, atol=0, rtol=0)
+        if cuda_rng is not None:
+            for actual, expected in zip(torch.cuda.get_rng_state_all(), cuda_rng):
+                torch.testing.assert_close(actual, expected, atol=0, rtol=0)
 
     def test_training_noise_and_target_keep_fp32(self):
         model = tiny_model()
@@ -487,6 +495,31 @@ class RepairAndEvaluationTests(unittest.TestCase):
 
 
 class TrainingStateTests(unittest.TestCase):
+    def test_auto_compile_uses_actual_epoch_job_length(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            trainer = self.make_trainer(folder)
+            trainer.train_config.qwen_image_21.update(epochs=30, compile="auto")
+            trainer.train_config.steps = 3000
+            trainer.train_config.gradient_accumulation_steps = 1
+            trainer.train_config.gradient_accumulation = 1
+            trainer.model_config.compile = True
+            trainer.device_torch = torch.device("cuda")
+            dataset = SimpleNamespace(file_list=[])
+            class Loader:
+                def __len__(self): return 2
+            trainer.data_loader = Loader()
+            trainer.data_loader_reg = None
+            trainer.save_config = SimpleNamespace(save_every=100)
+            trainer.sample_config = SimpleNamespace(sample_every=100)
+            controller = Qwen21TrainingController(trainer)
+            with patch("toolkit.data_loader.get_dataloader_datasets", return_value=[dataset]), \
+                 patch("toolkit.qwen_image21.training.warm_reference_cache"):
+                controller.prepare()
+            self.assertEqual(trainer.train_config.steps, 60)
+            self.assertFalse(trainer.model_config.compile)
+            controller.watch.close()
+
     def test_checkpoint_discovery_ignores_newer_state_sidecar(self):
         from jobs.process.BaseSDTrainProcess import BaseSDTrainProcess
         with tempfile.TemporaryDirectory() as folder:
