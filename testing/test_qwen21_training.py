@@ -51,6 +51,8 @@ def tiny_model(*, blocks=None, quantize=False):
     torch.manual_seed(123)
     model = qwen.QwenImage2Model(DEVICE, ModelConfig(arch="qwen_image_2", name_or_path="test",
         model_kwargs={"split_mlp_lora": True, "train_blocks": blocks}), dtype="fp32")
+    model.vae = None  # No pretrained VAE is needed in the numerical fixture.
+    model.text_encoder = []
     model.model = transformer_module.QwenImage21Transformer2DModel(
         in_channels=4, out_channels=4, num_layers=16, num_attention_heads=2,
         attention_head_dim=8, context_in_dim=12, axes_dims_rope=(2, 2, 4), mlp_ratio=3,
