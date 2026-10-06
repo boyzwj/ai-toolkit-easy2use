@@ -331,6 +331,17 @@ class AdapterTests(unittest.TestCase):
 
 
 class CacheTests(unittest.TestCase):
+    def test_reference_cache_accepts_unbatched_file_item_control(self):
+        model = tiny_model()
+        image = torch.ones(3, 32, 64, device=DEVICE)
+        source = image.cpu()
+        for control in (source, source.unsqueeze(0), source.unsqueeze(0).unsqueeze(0)):
+            samples = model._normalize_control_images(control, 1)
+            prepared = model._prepare_control_images(samples, target_pixels=32 * 64)
+            self.assertEqual(len(prepared), 1)
+            self.assertEqual(len(prepared[0]), 1)
+            torch.testing.assert_close(prepared[0][0], image.unsqueeze(0))
+
     def test_control_replacement_invalidates_text_cache(self):
         from toolkit.dataloader_mixins import TextEmbeddingFileItemDTOMixin
         with tempfile.TemporaryDirectory() as folder:

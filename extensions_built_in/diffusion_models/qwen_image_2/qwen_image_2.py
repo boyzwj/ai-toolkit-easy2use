@@ -473,6 +473,10 @@ class QwenImage2Model(BaseModel):
         if control_images is None:
             return [[] for _ in range(batch_size)]
         if isinstance(control_images, torch.Tensor):
+            if control_images.dim() == 3:
+                # FileItemDTO exposes an unbatched CHW image during cache
+                # warmup; training batches provide BCHW or BNCHW instead.
+                control_images = control_images.unsqueeze(0)
             if control_images.dim() == 5:
                 control_images = [list(sample) for sample in control_images]
             else:
