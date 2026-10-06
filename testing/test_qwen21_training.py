@@ -30,7 +30,7 @@ from toolkit.qwen_image21.config import configure_qwen21_training, IDENTITY_BLOC
 from toolkit.qwen_image21.lora import load_frozen_lora, split_fused_lora
 from toolkit.qwen_image21.training import Qwen21TrainingController
 from toolkit.qwen_image21.evaluation import identity_scores
-from toolkit.qwen_image21.recaption import repair_captions
+from toolkit.qwen_image21.recaption import repair_captions, reset_caption_cache
 
 
 # Import this model in isolation from the extension registry: unrelated audio
@@ -433,6 +433,23 @@ class PromptTests(unittest.TestCase):
 
 
 class RepairAndEvaluationTests(unittest.TestCase):
+    def test_caption_refresh_rereads_toolkit_raw_caption(self):
+        from PIL import Image
+        from toolkit.config_modules import DatasetConfig
+        from toolkit.data_transfer_object.data_loader import FileItemDTO
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "person.png"
+            Image.new("RGB", (64, 64), "white").save(path)
+            caption = path.with_suffix(".txt")
+            caption.write_text("old caption", encoding="utf-8")
+            item = FileItemDTO(path=str(path), dataset_config=DatasetConfig(folder_path=folder, caption_ext="txt"))
+            item.load_caption()
+            self.assertEqual(item.raw_caption, "old caption")
+            caption.write_text("new caption", encoding="utf-8")
+            reset_caption_cache(item)
+            self.assertEqual(item.raw_caption, "new caption")
+            self.assertEqual(item.caption, "new caption")
+
     def test_identity_scores_keep_missing_faces(self):
         report = identity_scores([[1, 0]], [("same", [2, 0]), ("different", [0, 1]), ("no-face", None)])
         self.assertEqual(report["samples_total"], 3)

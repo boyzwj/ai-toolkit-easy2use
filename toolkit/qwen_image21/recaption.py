@@ -74,7 +74,8 @@ class LocalQwenCaptioner:
 
 
 def reset_caption_cache(item):
-    for name in ("caption", "caption_short", "prompt_embeds", "dop_prompt_embeds", "dopsd_prompt_embeds",
+    for name in ("raw_caption", "raw_caption_short", "caption", "caption_short", "caption_dop", "caption_dopsd",
+                 "prompt_embeds", "dop_prompt_embeds", "dopsd_prompt_embeds",
                  "_text_embedding_path", "_blank_text_embedding_path", "_dop_text_embedding_path",
                  "_dop_blank_text_embedding_path", "_dopsd_text_embedding_path", "_dopsd_blank_text_embedding_path"):
         if hasattr(item, name):
