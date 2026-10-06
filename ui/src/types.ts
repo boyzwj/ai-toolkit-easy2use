@@ -156,6 +156,23 @@ export interface ValidationConfig {
 }
 
 export interface TrainConfig {
+  qwen_image_21?: {
+    profile?: string;
+    adaptive_lr?: boolean;
+    adaptive_lr_min?: number;
+    adaptive_lr_max?: number;
+    training_adapter?: boolean;
+    loss_watch?: boolean;
+    per_image_lr?: boolean;
+    auto_recaption?: boolean;
+    epochs?: number | null;
+    memory_plan?: string;
+    compile?: string;
+    context_lora_path?: string;
+    context_lora_strength?: number;
+    preview_lora_path?: string;
+    preview_lora_strength?: number;
+  };
   batch_size: number;
   bypass_guidance_embedding?: boolean;
   steps: number;

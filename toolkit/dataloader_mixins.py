@@ -2092,7 +2092,7 @@ class LatentCachingMixin:
                 extras = _dto_extras_from_state_dict(state_dict)
                 if extras:
                     cached_latent = DTO(cached_latent, **extras)
-                file_item._encoded_latent = cached_latent.to('cpu', dtype=self.sd.torch_dtype)
+                file_item._encoded_latent = cached_latent.to('cpu', dtype=getattr(self.sd, 'latent_cache_dtype', self.sd.torch_dtype))
                 if 'first_frame_latent' in state_dict:
                     cached_first_frame = state_dict['first_frame_latent']
                     if cached_first_frame.dtype == torch.uint8:
@@ -2190,7 +2190,7 @@ class LatentCachingMixin:
                 # keep it in memory; audio rides inside the latent DTO
                 if audio_latent is not None:
                     latent = DTO(latent, audio=audio_latent)
-                file_item._encoded_latent = latent.to('cpu', dtype=self.sd.torch_dtype)
+                file_item._encoded_latent = latent.to('cpu', dtype=getattr(self.sd, 'latent_cache_dtype', self.sd.torch_dtype))
                 if first_frame_latent is not None:
                     file_item._cached_first_frame_latent = first_frame_latent.to('cpu', dtype=self.sd.torch_dtype)
 
@@ -2250,6 +2250,11 @@ class TextEmbeddingFileItemDTOMixin:
         # if we have a control image, cache the path
         if self.encode_control_in_text_embeddings and self.control_path is not None:
             item["control_path"] = self.control_path
+            if self.text_embedding_space_version.startswith("qwen_image_2_"):
+                from toolkit.qwen_image21.cache import file_sha256
+                paths = self.control_path if isinstance(self.control_path, list) else [self.control_path]
+                item["control_contents"] = [file_sha256(path) for path in paths]
+                item["control_rgba"] = getattr(self, 'load_rgba', False)
             if getattr(self, 'text_embedding_uses_target_size', False) and getattr(self, 'crop_width', None):
                 item["control_target_size"] = [self.crop_width, self.crop_height]
         if self.encode_control_in_text_embeddings and getattr(self, 'control_video_paths', None):
@@ -2481,7 +2486,7 @@ class TextEmbeddingCachingMixin:
                             control_path_list = [control_path_list]
                         for i in range(len(control_path_list)):
                             try:
-                                img = Image.open(control_path_list[i]).convert("RGB")
+                                img = Image.open(control_path_list[i]).convert("RGBA" if self.sd.load_rgba else "RGB")
                                 img = exif_transpose(img)
                                 # convert to 0 to 1 tensor
                                 img = (

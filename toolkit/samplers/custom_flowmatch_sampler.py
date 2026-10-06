@@ -114,7 +114,7 @@ class CustomFlowMatchEulerDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
         patch_size=1
     ):
         self.timestep_type = timestep_type
-        if timestep_type == 'linear' or timestep_type == 'weighted':
+        if timestep_type in ('linear', 'weighted', 'shifted_logit_normal'):
             timesteps = torch.linspace(1000, 1, num_timesteps, device=device)
             self.timesteps = timesteps
             return timesteps
@@ -218,3 +218,23 @@ class CustomFlowMatchEulerDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
             return timesteps
         else:
             raise ValueError(f"Invalid timestep type: {timestep_type}")
+
+    def sample_training_timesteps(self, batch_size, *, latents, patch_size=1,
+                                  min_t=0.0, max_t=1.0, generator=None):
+        """Fizgig/Qwen distribution without inference terminal stretching.
+
+        sigmoid(N(0,1)) followed by exponential resolution shift is exactly
+        sigmoid(N(0,1) + mu). Apply the affine timestep range last.
+        """
+        if not 0 <= min_t < max_t <= 1:
+            raise ValueError('Require 0 <= min_t < max_t <= 1')
+        image_seq_len = latents.shape[-2] * latents.shape[-1] // (patch_size ** 2)
+        mu = calculate_shift(image_seq_len,
+                             self.config.get('base_image_seq_len', 256),
+                             self.config.get('max_image_seq_len', 8192),
+                             self.config.get('base_shift', 0.5),
+                             self.config.get('max_shift', 0.9))
+        device = generator.device if generator is not None else latents.device
+        draws = torch.randn((batch_size,), generator=generator, device=device, dtype=torch.float32)
+        t = min_t + (max_t - min_t) * torch.sigmoid(draws + mu)
+        return (t * self.config.num_train_timesteps).to(latents.device)

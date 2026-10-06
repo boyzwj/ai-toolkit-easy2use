@@ -34,6 +34,9 @@ class FakeTextEncoder(torch.nn.Module):
 
 
 def unload_text_encoder(model: "BaseModel"):
+    hook = getattr(model, "before_text_encoder_unload", None)
+    if callable(hook):
+        hook()
     # unload the text encoder in a way that will work with all models and will not throw errors
     # we need to make it appear as a text encoder module without actually having one so all
     # to functions and what not will work.

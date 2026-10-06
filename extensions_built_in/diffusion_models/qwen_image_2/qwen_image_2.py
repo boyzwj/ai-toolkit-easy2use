@@ -22,6 +22,7 @@ noise - clean), so `get_noise_prediction` does no time flip or negation.
 """
 
 import os
+import re
 from typing import TYPE_CHECKING, List, Optional
 
 import numpy as np
@@ -33,10 +34,12 @@ from toolkit.advanced_prompt_embeds import AdvancedPromptEmbeds
 from toolkit.basic import flush
 from toolkit.config_modules import GenerateImageConfig, ModelConfig
 from toolkit.metadata import get_meta_for_safetensors
+from toolkit.train_tools import apply_noise_offset
 from toolkit.models.base_model import BaseModel
 from toolkit.samplers.custom_flowmatch_sampler import (
     CustomFlowMatchEulerDiscreteScheduler,
 )
+from toolkit.qwen_image21.lora import load_frozen_lora, split_fused_lora
 
 from .src.pipeline import (
     QwenImage21Pipeline,
@@ -134,8 +137,15 @@ class QwenImage2Model(BaseModel):
         self.has_multiple_control_images = True
         # References keep their own size/aspect; prepare_condition_image budgets them
         # identically in the cache and training paths so slot counts always agree.
-        # Batch > 1 requires same-size references (checked in encode_condition_images).
+        # Training runs heterogeneous reference layouts individually within a batch.
         self.use_raw_control_images = True
+        self.qwen_training_options = model_config.model_kwargs.get("qwen_training", {})
+        self.context_lora = None
+        self.preview_lora = None
+        blocks = model_config.model_kwargs.get("train_blocks")
+        self.train_blocks = None if blocks is None else frozenset(int(b) for b in blocks)
+        if self.train_blocks is not None and (not self.train_blocks or not self.train_blocks <= set(range(32))):
+            raise ValueError("Qwen train_blocks must be a nonempty subset of 0..31")
 
     @staticmethod
     def get_train_scheduler():
@@ -181,6 +191,7 @@ class QwenImage2Model(BaseModel):
                 # use the state-dict loader so their layout and buffers are restored.
                 te_path = te_file
         self.print_and_status_update(f"Loading text encoder from {te_path}")
+        self._text_encoder_load_args = (te_path, base_model_path)
         processor = QwenImage21TextEncoder.load_processor(base_model_path)
         text_encoder = QwenImage21TextEncoder.load_model(
             te_path,
@@ -188,6 +199,11 @@ class QwenImage2Model(BaseModel):
             config_path=base_model_path,
             subfolder="text_encoder",
         )
+        # Conditioning reads the decoder backbone directly, so no LM head is
+        # needed. T2I recipes also omit the unused vision tower.
+        text_encoder.lm_head = None
+        if self.model_config.model_kwargs.get("text_only", False):
+            text_encoder.drop_vision_tower()
         # the vision tower stays: any prompt may carry reference images. bf16
         # Conv3d has no fast kernel, the equivalent GEMM does
         text_encoder.patch_vision_patch_embed()
@@ -213,9 +229,103 @@ class QwenImage2Model(BaseModel):
         self.tokenizer = [processor.tokenizer]
         self.processor = processor
         self.model = transformer
+        # Residual projections have no base parameters: the fused native
+        # weights and quantization buffers are not changed by this operation.
+        for block in transformer.transformer_blocks:
+            block.img_mlp.enable_split_lora()
         self.prompt_encoder = QwenImage21PromptEncoder(text_encoder, processor)
         self.pipeline = QwenImage21Pipeline(self)
+        if self.model_config.assistant_lora_path:
+            self.assistant_lora = load_frozen_lora(
+                self, self.model_config.assistant_lora_path,
+                self.qwen_training_options.get("training_adapter_strength", 1.0),
+            )
+        for role in ("context", "preview"):
+            path = self.qwen_training_options.get(f"{role}_lora_path")
+            if path:
+                adapter = load_frozen_lora(self, path, self.qwen_training_options.get(f"{role}_lora_strength", 1.0))
+                setattr(self, f"{role}_lora", adapter)
+                adapter.is_active = role == "context"
+        from toolkit.qwen_image21.cache import ReferenceLatentCache
+        self.reference_latent_cache = ReferenceLatentCache(self)
         self.print_and_status_update("Model Loaded")
+
+    def before_text_encoder_unload(self):
+        # The generic unloader replaces holder/pipeline references. This
+        # wrapper otherwise keeps the entire Qwen3-VL alive after caching.
+        self.prompt_encoder = None
+
+    def reload_text_encoder(self):
+        if self.prompt_encoder is not None:
+            return
+        path, config_path = self._text_encoder_load_args
+        text_encoder = QwenImage21TextEncoder.load_model(path, dtype=self.torch_dtype,
+                                                       config_path=config_path, subfolder="text_encoder")
+        text_encoder.lm_head = None
+        if self.model_config.model_kwargs.get("text_only", False):
+            text_encoder.drop_vision_tower()
+        text_encoder.patch_vision_patch_embed()
+        text_encoder.aitk_post_load(**self.component_load_kwargs("te"))
+        text_encoder.eval().requires_grad_(False)
+        self.text_encoder = [text_encoder]
+        self.prompt_encoder = QwenImage21PromptEncoder(text_encoder, self.processor)
+
+    def get_latent_space_version(self):
+        version = super().get_latent_space_version()
+        if self.model_config.model_kwargs.get("latent_sampling", "sample") == "mode":
+            precision = "fp32-v2" if self.qwen_training_options and self.qwen_training_options.get("profile") != "legacy" else "v1"
+            return f"{version}:posterior-mode-{precision}"
+        return version
+
+    @property
+    def latent_cache_dtype(self):
+        return torch.float32 if self.qwen_training_options and self.qwen_training_options.get("profile") != "legacy" else self.torch_dtype
+
+    def should_train_lora_module(self, name, module):
+        split = self.model_config.model_kwargs.get("split_mlp_lora", False)
+        if name.endswith(".img_mlp.gate_up") and split:
+            return False
+        if module.__class__.__name__ == "QwenImage21LoRAProjection" and not split:
+            return False
+        if self.train_blocks is not None:
+            match = re.search(r"(?:^|\.)transformer_blocks\.(\d+)\.", name)
+            return match is not None and int(match.group(1)) in self.train_blocks
+        return True
+
+    def convert_lora_weights_before_save(self, state_dict):
+        if any(".img_mlp.gate_layer." in k or ".img_mlp.proj." in k for k in state_dict):
+            # Split MLP adapters use the diffusers/Fizgig namespace. ComfyUI
+            # supports this layout as well as its own fused gate_up layout.
+            return {k.replace("diffusion_model.", "transformer.", 1): v for k, v in state_dict.items()}
+        return super().convert_lora_weights_before_save(state_dict)
+
+    def convert_lora_weights_before_load(self, state_dict):
+        result = super().convert_lora_weights_before_load(state_dict)
+        if self.model_config.model_kwargs.get("split_mlp_lora", False):
+            result = split_fused_lora(result)
+        return result
+
+    def generate_images(self, *args, **kwargs):
+        # BaseModel toggles the training helper. Restore every adapter even if
+        # preview decoding or sampling raises (including an OOM).
+        adapters = [a for a in (self.assistant_lora, self.context_lora, self.preview_lora) if a is not None]
+        active = [a.is_active for a in adapters]
+        network = self.network
+        training = self.model.training
+        network_state = None if network is None else (network.training, network.is_active, network.multiplier)
+        if network is not None and self.model_config.model_kwargs.get("split_mlp_lora", False):
+            network.can_merge_in = False
+        try:
+            if self.preview_lora is not None:
+                self.preview_lora.is_active = True
+            return super().generate_images(*args, **kwargs)
+        finally:
+            for adapter, was_active in zip(adapters, active):
+                adapter.is_active = was_active
+            self.model.train(training)
+            if network is not None:
+                network.train(network_state[0])
+                network.is_active, network.multiplier = network_state[1:]
 
     # ------------------------------------------------------------------
     # VAE. The latents are RGBA. Images without alpha get an opaque one on
@@ -247,7 +357,13 @@ class QwenImage2Model(BaseModel):
             images = torch.cat([images, torch.ones_like(images[:, :1])], dim=1)
         images = images.unsqueeze(2)  # single-frame dim
 
-        latents = self.vae.encode(images).latent_dist.sample()
+        posterior = self.vae.encode(images).latent_dist
+        sampling = self.model_config.model_kwargs.get("latent_sampling", "sample")
+        if sampling not in ("sample", "mode"):
+            raise ValueError("Qwen latent_sampling must be sample or mode")
+        latents = posterior.mode() if sampling == "mode" else posterior.sample()
+        if self.qwen_training_options and self.qwen_training_options.get("profile") != "legacy":
+            latents = latents.float()
         mean, std = self._latent_stats(latents.device, latents.dtype)
         latents = (latents - mean) / std
         return latents.squeeze(2).to(device, dtype=dtype)
@@ -327,7 +443,7 @@ class QwenImage2Model(BaseModel):
     def get_text_embedding_space_version(self) -> str:
         # reference sizing changes the vision tokens; keep caches from different rules apart
         rule = "match" if self.match_target_res else f"cap{self.control_image_max_pixels}"
-        return f"{self.text_embedding_space_version}_ref{rule}"
+        return f"{self.text_embedding_space_version}_ref{rule}_vision-no-resize-v2"
 
     def _target_pixels(self, target_size) -> Optional[int]:
         """`(width, height)` -> pixel area on the 32 px grid, or None. Floors the
@@ -386,7 +502,7 @@ class QwenImage2Model(BaseModel):
             prepared.append(images)
         return prepared
 
-    def encode_condition_images(self, control_images):
+    def encode_condition_images(self, control_images, cache_paths=None):
         """Reference images -> `(B, N, C)` packed latents plus their latent grids.
 
         `control_images` is a per-sample list of `(1, C, H, W)` tensors in
@@ -399,11 +515,8 @@ class QwenImage2Model(BaseModel):
         for index, sample in enumerate(control_images):
             packed = []
             for image in sample:
-                latent = self.encode_images(
-                    [image[0].to(self.device_torch) * 2 - 1],
-                    device=self.device_torch,
-                    dtype=self.torch_dtype,
-                )
+                path = cache_paths[index] if cache_paths is not None else None
+                latent = self.reference_latent_cache.get(image, dataset_image_path=path)
                 if index == 0:
                     shapes.append((latent.shape[2], latent.shape[3]))
                 packed.append(pack_latents(latent))
@@ -424,6 +537,8 @@ class QwenImage2Model(BaseModel):
     def get_prompt_embeds(
         self, prompt, control_images=None, target_size=None
     ) -> AdvancedPromptEmbeds:
+        if self.prompt_encoder is None:
+            raise RuntimeError("Qwen text encoder has been unloaded; use cached embeddings or disable text caching")
         if isinstance(prompt, str):
             prompt = [prompt]
         if self.text_encoder[0].device != self.device_torch:
@@ -486,7 +601,7 @@ class QwenImage2Model(BaseModel):
         # The prompt is what decides: it reserved the slots the references go
         # into, so a prompt encoded without them (a plain T2I dataset, a fully
         # dropped caption) takes no references here either.
-        condition_latents, condition_shapes = None, []
+        samples = None
         if batch is not None and bool(slot_mask.any()):
             with torch.no_grad():
                 control = batch.control_tensor_list
@@ -501,9 +616,6 @@ class QwenImage2Model(BaseModel):
                     self._normalize_control_images(control, batch_size),
                     target_pixels=target_pixels,
                 )
-                condition_latents, condition_shapes = self.encode_condition_images(
-                    samples
-                )
 
         # toolkit timestep (0..1000, 1000 = pure noise) -> the model's t in [0, 1];
         # same direction, so a plain divide
@@ -513,23 +625,40 @@ class QwenImage2Model(BaseModel):
         if t.shape[0] != batch_size:
             t = t.expand(batch_size)
 
-        return run_transformer(
-            self.transformer,
-            latent_model_input.to(self.device_torch, self.torch_dtype),
-            t,
-            prompt_embeds,
-            prompt_mask,
-            slot_mask,
-            condition_latents=condition_latents,
-            condition_shapes=condition_shapes,
-            **kwargs,
-        )
+        # Dropout can remove reference slots from only some rows. References
+        # can also have different aspect ratios/counts; their RoPE grids are
+        # per image. Run these rows separately rather than reuse row 0's layout.
+        paths = [item.path for item in batch.file_items] if batch is not None else None
+        def predict(indices):
+            condition_latents, condition_shapes = None, []
+            if samples is not None and bool(slot_mask[indices].any()):
+                with torch.no_grad():
+                    condition_latents, condition_shapes = self.encode_condition_images(
+                        [samples[i] for i in indices],
+                        cache_paths=[paths[i] for i in indices] if paths is not None else None,
+                    )
+            return run_transformer(
+                self.transformer,
+                latent_model_input[indices].to(self.device_torch, self.torch_dtype),
+                t[indices], prompt_embeds[indices], prompt_mask[indices], slot_mask[indices],
+                condition_latents=condition_latents, condition_shapes=condition_shapes, **kwargs,
+            )
+        if samples is not None and batch_size > 1:
+            return torch.cat([predict([i]) for i in range(batch_size)], dim=0)
+        return predict(list(range(batch_size)))
 
     def get_loss_target(self, *args, **kwargs):
         # flow-matching velocity target: noise - clean
         noise = kwargs.get("noise")
         batch = kwargs.get("batch")
+        if self.qwen_training_options and self.qwen_training_options.get("profile") != "legacy":
+            return (noise.float() - batch.latents.float()).detach()
         return (noise - batch.latents).detach()
+
+    def get_latent_noise_from_latents(self, latents, noise_offset=0.0):
+        if self.qwen_training_options and self.qwen_training_options.get("profile") != "legacy":
+            return apply_noise_offset(torch.randn_like(latents, dtype=torch.float32), noise_offset)
+        return super().get_latent_noise_from_latents(latents, noise_offset=noise_offset)
 
     def get_model_has_grad(self):
         return False

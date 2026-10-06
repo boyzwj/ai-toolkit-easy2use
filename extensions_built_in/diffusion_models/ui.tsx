@@ -11,6 +11,52 @@ import {
 
 const defaultNameOrPath = "";
 const defaultLinearRank = 32;
+const qwen21TrainingAdapter =
+  "ShootTheSound/Fizgig-Qwen-Image-2.1-Training-Adapter/fizgig_qwen_image_2.1_training_adapter.safetensors";
+const qwen21Recipes: Record<string, { rank: number; resolution: number; min?: number; max?: number; lr?: number }> = {
+  fast: { rank: 8, resolution: 704, min: 2e-4, max: 4e-4 },
+  standard: { rank: 16, resolution: 704, min: 1e-4, max: 2e-4 },
+  identity: { rank: 8, resolution: 512, min: 2e-4, max: 4e-4 },
+  style: { rank: 16, resolution: 704, lr: 1.5e-4 },
+  edit: { rank: 8, resolution: 704, min: 2e-4, max: 4e-4 },
+  edit_standard: { rank: 16, resolution: 704, min: 1e-4, max: 2e-4 },
+};
+
+const applyQwen21Recipe = (profile: string, config: JobConfig, setJobConfig: (value: any, key: string) => void) => {
+  const process = structuredClone(config.config.process[0]);
+  const legacy = profile === "legacy";
+  const recipe = qwen21Recipes[profile];
+  process.network ??= { type: "lora", linear: 8, linear_alpha: 8, conv: 0, conv_alpha: 0,
+    lokr_full_rank: true, lokr_factor: -1, network_kwargs: { ignore_if_contains: [] } };
+  process.train.qwen_image_21 = {
+    ...process.train.qwen_image_21, profile,
+    adaptive_lr: !legacy && !!recipe.min,
+    adaptive_lr_min: recipe?.min ?? 1e-4,
+    adaptive_lr_max: recipe?.max ?? 2e-4,
+    training_adapter: !legacy, loss_watch: !legacy,
+  };
+  process.network.linear = legacy ? defaultLinearRank : recipe.rank;
+  process.network.linear_alpha = process.network.linear;
+  process.train.lr = legacy ? 1e-4 : recipe.lr ?? Math.sqrt(recipe.min! * recipe.max!);
+  process.train.timestep_type = legacy ? "shift" : "shifted_logit_normal";
+  process.train.cache_text_embeddings = !legacy;
+  process.train.unload_text_encoder = !legacy;
+  process.train.ema_config = { use_ema: !legacy, ema_decay: 0.98 };
+  process.train.optimizer_params = { ...process.train.optimizer_params, weight_decay: 0 };
+  process.model.assistant_lora_path = legacy ? undefined : qwen21TrainingAdapter;
+  process.model.model_kwargs = {
+    ...process.model.model_kwargs,
+    split_mlp_lora: !legacy,
+    latent_sampling: legacy ? "sample" : "mode",
+    cache_reference_latents: !legacy,
+    train_blocks: profile === "identity" ? [10, 11, 12, 13, 14] : null,
+  };
+  process.datasets = process.datasets.map(dataset => ({
+    ...dataset, resolution: legacy ? [512, 768, 1024] : [recipe.resolution],
+    cache_latents_to_disk: !legacy,
+  }));
+  setJobConfig(process, "config.process[0]");
+};
 
 export const AI_TOOLKIT_UI_MODELS: ModelArch[] = [
   {
@@ -576,6 +622,7 @@ export const AI_TOOLKIT_UI_MODELS: ModelArch[] = [
     name: "qwen_image_2",
     label: "Qwen-Image-2.1",
     group: "image",
+    generate: { model: { assistant_lora_path: null } },
     defaults: {
       // default updates when [selected, unselected] in the UI
       "config.process[0].model.name_or_path": [
@@ -585,20 +632,36 @@ export const AI_TOOLKIT_UI_MODELS: ModelArch[] = [
       "config.process[0].model.quantize": [true, false],
       "config.process[0].model.quantize_te": [true, false],
       "config.process[0].model.low_vram": [true, false],
-      "config.process[0].train.unload_text_encoder": [false, false],
+      "config.process[0].train.unload_text_encoder": [true, false],
+      "config.process[0].train.cache_text_embeddings": [true, false],
+      "config.process[0].network.linear": [8, defaultLinearRank],
+      "config.process[0].network.linear_alpha": [8, defaultLinearRank],
+      "config.process[0].train.lr": [Math.sqrt(2e-4 * 4e-4), 1e-4],
+      "config.process[0].train.ema_config": [{ use_ema: true, ema_decay: 0.98 }, { use_ema: false }],
+      "config.process[0].train.optimizer_params.weight_decay": [0, 1e-4],
+      "config.process[0].train.qwen_image_21": [{
+        profile: "fast", adaptive_lr: true, adaptive_lr_min: 2e-4, adaptive_lr_max: 4e-4,
+        training_adapter: true, loss_watch: true, memory_plan: "auto", compile: "auto",
+      }, undefined],
+      "config.process[0].datasets[0].resolution": [[704], [512, 768, 1024]],
+      "config.process[0].datasets[0].cache_latents_to_disk": [true, false],
+      "config.process[0].model.assistant_lora_path": [qwen21TrainingAdapter, undefined],
       "config.process[0].sample.sampler": ["flowmatch", "flowmatch"],
       "config.process[0].train.noise_scheduler": ["flowmatch", "flowmatch"],
-      "config.process[0].train.timestep_type": ["shift", "sigmoid"],
+      "config.process[0].train.timestep_type": ["shifted_logit_normal", "sigmoid"],
       // the Comfy-Org weights are pre-quantized int8 convrot; these qtypes
       // match the checkpoints exactly, so the load is unchanged. Picking a
       // different qtype re-quantizes layer by layer into that format.
       "config.process[0].model.qtype": ["convrot8", "qfloat8"],
       "config.process[0].model.qtype_te": ["convrot8", "qfloat8"],
-      "config.process[0].sample.guidance_scale": [3.0, 4.0],
+      "config.process[0].sample.guidance_scale": [1.0, 4.0],
       // the VAE is RGBA: images load, encode and decode with their alpha
       "config.process[0].model.model_kwargs": [
         {
           rgba: false,
+          latent_sampling: "mode",
+          split_mlp_lora: true,
+          cache_reference_latents: true,
         },
         {},
       ],
@@ -611,8 +674,73 @@ export const AI_TOOLKIT_UI_MODELS: ModelArch[] = [
       "sample.multi_ctrl_imgs",
       "model.low_vram",
       "model.layer_offloading",
+      "model.assistant_lora_path",
     ],
     customModelSelectOptions: [
+      {
+        label: "Qwen 2.1 训练预设",
+        options: [
+          { value: "fast", label: "人物快速训练 · rank 8" },
+          { value: "standard", label: "标准训练 · rank 16" },
+          { value: "identity", label: "人物身份专用（实验）· block 10–14" },
+          { value: "style", label: "风格训练 · 固定学习率" },
+          { value: "edit", label: "编辑训练 · rank 8" },
+          { value: "edit_standard", label: "复杂编辑 · rank 16" },
+          { value: "legacy", label: "旧训练逻辑 · 兼容旧任务" },
+        ],
+        getValue: config => config.config.process[0].train.qwen_image_21?.profile ?? "legacy",
+        onChange: applyQwen21Recipe,
+        doc: { title: "Qwen 2.1 训练预设", description: <p>采用 Fizgig 的辅助 LoRA、独立 MLP 适配器、时间步采样和 EMA 配置。身份专用模式实验性地只训练 block 10–14，建议和快速模式对照；场景和风格变化较多时可选标准训练。修改预设后使用新的任务名称，恢复旧任务请选择原有预设。</p> },
+      },
+      {
+        label: "训练时长",
+        options: [{ value: "steps", label: "使用训练步数" }, { value: "12", label: "12 轮（编辑训练）" }, { value: "30", label: "30 轮（人物和风格）" }],
+        getValue: config => String(config.config.process[0].train.qwen_image_21?.epochs ?? "steps"),
+        onChange: (value, config, setJobConfig) => setJobConfig(value === "steps" ? null : Number(value), "config.process[0].train.qwen_image_21.epochs"),
+        doc: { title: "训练时长", description: <p>按轮数训练时，启动后会根据数据集大小换算总步数，并在每轮保存和预览。使用训练步数时，下方步数设置生效。</p> },
+      },
+      {
+        label: "显存与编译",
+        options: [{ value: "auto", label: "自动安排显存和编译" }, { value: "manual", label: "使用手动设置" }],
+        getValue: config => config.config.process[0].train.qwen_image_21?.memory_plan ?? "manual",
+        onChange: (value, config, setJobConfig) => setJobConfig({ ...config.config.process[0].train.qwen_image_21, memory_plan: value, compile: value === "auto" ? "auto" : "off" }, "config.process[0].train.qwen_image_21"),
+        doc: { title: "显存与编译", description: <p>自动模式按启动时的可用 CUDA 显存选择 BF16 或原生 INT8，并安排层卸载；较长且无需卸载的任务启用按层编译。手动模式使用下面的量化、卸载和编译设置。</p> },
+      },
+      {
+        type: "checkbox", label: "使用 Fizgig 训练辅助 LoRA",
+        getValue: config => config.config.process[0].train.qwen_image_21?.training_adapter ?? false,
+        onChange: (value, config, setJobConfig) => {
+          const process = structuredClone(config.config.process[0]);
+          process.train.qwen_image_21 = { ...process.train.qwen_image_21, training_adapter: value };
+          process.model.assistant_lora_path = value ? qwen21TrainingAdapter : undefined;
+          setJobConfig(process, "config.process[0]");
+        },
+        doc: { title: "训练辅助 LoRA", description: <p>辅助 LoRA 冻结，仅在训练时启用。预览自动关闭，保存结果只包含你训练的 LoRA。首次使用会下载辅助文件。</p> },
+      },
+      {
+        type: "checkbox", label: "自适应学习率",
+        getValue: config => config.config.process[0].train.qwen_image_21?.adaptive_lr ?? false,
+        onChange: (value, config, setJobConfig) => setJobConfig(value, "config.process[0].train.qwen_image_21.adaptive_lr"),
+        doc: { title: "自适应学习率", description: <p>损失持续改善时小幅提高学习率，停滞时降低；权重增长异常时回退上一轮的权重与优化器状态。预设提供相应的学习率上下限。</p> },
+      },
+      {
+        type: "checkbox", label: "记录并诊断问题图片",
+        getValue: config => config.config.process[0].train.qwen_image_21?.loss_watch ?? false,
+        onChange: (value, config, setJobConfig) => setJobConfig(value, "config.process[0].train.qwen_image_21.loss_watch"),
+        doc: { title: "问题图片诊断", description: <p>按图片及噪声区间记录损失，分析学习停滞和过度训练，输出问题图片报告及建议检查的训练轮次。默认只观察，不修改图片或字幕。</p> },
+      },
+      {
+        type: "checkbox", label: "按图片学习情况调整训练权重",
+        getValue: config => config.config.process[0].train.qwen_image_21?.per_image_lr ?? false,
+        onChange: (value, config, setJobConfig) => setJobConfig({ ...config.config.process[0].train.qwen_image_21, per_image_lr: value, ...(value ? { loss_watch: true } : {}) }, "config.process[0].train.qwen_image_21"),
+        doc: { title: "按图片调整权重", description: <p>启用后，问题图片降低训练权重，容易学习的图片可小幅提高权重。此功能默认关闭；人物身份预设沿用 Fizgig 评测时的观察模式。</p> },
+      },
+      {
+        type: "checkbox", label: "自动修复问题字幕（备份原字幕）",
+        getValue: config => config.config.process[0].train.qwen_image_21?.auto_recaption ?? false,
+        onChange: (value, config, setJobConfig) => setJobConfig({ ...config.config.process[0].train.qwen_image_21, auto_recaption: value, ...(value ? { loss_watch: true } : {}) }, "config.process[0].train.qwen_image_21"),
+        doc: { title: "自动修复问题字幕", description: <p>默认关闭。开启后，轮次之间用本地 Qwen3-VL 修复持续停滞图片的字幕，备份原字幕并更新文本缓存。每张图最多修复两次，之后仍停滞则在本次训练中排除。需要文本缓存，并使用 1 次梯度累积；首次使用可能下载打标模型。</p> },
+      },
       {
         type: "checkbox",
         label: "Transparency (RGBA)",

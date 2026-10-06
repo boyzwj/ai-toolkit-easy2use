@@ -208,7 +208,10 @@ class InferenceLoRA:
             alpha = parts.get("alpha")
             if alpha is not None:
                 e.alpha = float(alpha.flatten()[0])
-            w_shape = getattr(getattr(module, "weight", None), "shape", None)
+            if hasattr(module, "in_features") and hasattr(module, "out_features"):
+                w_shape = (module.out_features, module.in_features)
+            else:
+                w_shape = getattr(getattr(module, "weight", None), "shape", None)
             if e.A is not None and e.B is not None and e.A.dim() == 2:
                 if w_shape is not None and (e.B.shape[0] != w_shape[0] or e.A.shape[1] != w_shape[1]):
                     self.unmatched.append(f"{base} (shape {tuple(e.B.shape[0:1]) + tuple(e.A.shape[1:])} vs {tuple(w_shape)})")
@@ -348,6 +351,8 @@ class InferenceLoRA:
         weights: dequantize -> add -> requantize on the stored grid with
         stochastic rounding (int8 backends), nearest otherwise. Plain weights
         in bf16/fp16 on cuda: stochastic rounding via copy_stochastic."""
+        if any(getattr(e.module, "lora_can_merge", True) is False for e in self.entries):
+            raise ValueError("This LoRA uses independent residual projections; use lora_mode: hook")
         from toolkit.optimizers.optimizer_utils import copy_stochastic
 
         merged = 0

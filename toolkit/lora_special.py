@@ -31,6 +31,7 @@ LINEAR_MODULES = [
     'LoRACompatibleLinear',
     'QLinear',
     'OstrisLinear',
+    'QwenImage21LoRAProjection',
     # 'GroupNorm',
 ]
 CONV_MODULES = [
@@ -63,7 +64,7 @@ class LoRAModule(ToolkitModuleMixin, ExtractableModuleMixin, torch.nn.Module):
             is_ara: bool = False,
             **kwargs
     ):
-        self.can_merge_in = True
+        self.can_merge_in = getattr(org_module, 'lora_can_merge', True)
         """if alpha == 0 or None, alpha is rank (no scaling)."""
         ToolkitModuleMixin.__init__(self, network=network)
         torch.nn.Module.__init__(self)
@@ -507,13 +508,15 @@ class LoRASpecialNetwork(ToolkitNetworkMixin, LoRANetwork):
                         # - full_if_contains: any matching layer, INCLUDING linear/conv, overriding the
                         #   normal lora for it
                         all_layers = self.network_config is not None and getattr(self.network_config, 'all_layers', False)
-                        is_leaf_with_weight = (
-                            len(list(child_module.children())) == 0
-                            and isinstance(getattr(child_module, 'weight', None), torch.nn.Parameter)
-                        )
                         matches_full_if_contains = len(self.full_if_contains) > 0 and (
                             any([word in clean_name for word in self.full_if_contains])
                             or any([word in lora_name for word in self.full_if_contains])
+                        )
+                        # Accessing OstrisLinear.weight dequantizes the whole
+                        # base matrix. Ordinary LoRA only needs in/out sizes.
+                        is_leaf_with_weight = (all_layers or matches_full_if_contains) and (
+                            len(list(child_module.children())) == 0
+                            and isinstance(getattr(child_module, 'weight', None), torch.nn.Parameter)
                         )
                         is_full_layer = is_leaf_with_weight and (
                             matches_full_if_contains
@@ -521,6 +524,9 @@ class LoRASpecialNetwork(ToolkitNetworkMixin, LoRANetwork):
                         )
 
                         skip = False
+                        model_filter = getattr(base_model, "should_train_lora_module", None)
+                        if callable(model_filter) and not model_filter(clean_name, child_module):
+                            skip = True
                         if any([word in clean_name for word in self.ignore_if_contains]):
                             skip = True
 
@@ -773,5 +779,3 @@ class LoRASpecialNetwork(ToolkitNetworkMixin, LoRANetwork):
                 all_params.append({"lr": unet_lr, "params": list(self.unet_conv_out.parameters())})
 
         return all_params
-
-

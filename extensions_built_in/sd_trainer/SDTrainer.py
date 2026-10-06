@@ -150,17 +150,18 @@ class SDTrainer(BaseSDTrainProcess):
         except Exception:
             return self.sd.encode_prompt(prompt, control_images=self.get_blank_control_image(), **kwargs)
     
-    def cache_sample_prompts(self):
+    def cache_sample_prompts(self, sample_config=None):
         if self.train_config.disable_sampling:
             return
-        if self.sample_config is not None and self.sample_config.samples is not None and len(self.sample_config.samples) > 0:
+        sample_config = sample_config or self.sample_config
+        if sample_config is not None and sample_config.samples is not None and len(sample_config.samples) > 0:
             # cache all the samples
-            self.sd.sample_prompts_cache = []
+            cache = []
             sample_folder = os.path.join(self.save_root, 'samples')
             output_path = os.path.join(sample_folder, 'test.jpg')
-            for i in range(len(self.sample_config.prompts)):
-                sample_item = self.sample_config.samples[i]
-                prompt = self.sample_config.prompts[i]
+            for i in range(len(sample_config.prompts)):
+                sample_item = sample_config.samples[i]
+                prompt = sample_config.prompts[i]
 
                 if self.trigger_word is not None:
                     prompt = self.sd.inject_trigger_into_prompt(
@@ -176,6 +177,8 @@ class SDTrainer(BaseSDTrainProcess):
                     ctrl_img_1=sample_item.ctrl_img_1,
                     ctrl_img_2=sample_item.ctrl_img_2,
                     ctrl_img_3=sample_item.ctrl_img_3,
+                    width=sample_config.width,
+                    height=sample_config.height,
                 )
 
                 has_control_images = False
@@ -197,7 +200,7 @@ class SDTrainer(BaseSDTrainProcess):
                         # supports_video_control_images handle it in get_prompt_embeds
                         ctrl_img_list.append(str(gen_img_config.ctrl_img))
                     elif gen_img_config.ctrl_img is not None:
-                        ctrl_img = Image.open(gen_img_config.ctrl_img).convert("RGB")
+                        ctrl_img = Image.open(gen_img_config.ctrl_img).convert("RGBA" if self.sd.load_rgba else "RGB")
                         # convert to 0 to 1 tensor
                         ctrl_img = (
                             TF.to_tensor(ctrl_img)
@@ -211,7 +214,7 @@ class SDTrainer(BaseSDTrainProcess):
                         # supports_video_control_images handle it in get_prompt_embeds
                         ctrl_img_list.append(str(gen_img_config.ctrl_img_1))
                     elif gen_img_config.ctrl_img_1 is not None:
-                        ctrl_img_1 = Image.open(gen_img_config.ctrl_img_1).convert("RGB")
+                        ctrl_img_1 = Image.open(gen_img_config.ctrl_img_1).convert("RGBA" if self.sd.load_rgba else "RGB")
                         # convert to 0 to 1 tensor
                         ctrl_img_1 = (
                             TF.to_tensor(ctrl_img_1)
@@ -224,7 +227,7 @@ class SDTrainer(BaseSDTrainProcess):
                         # supports_video_control_images handle it in get_prompt_embeds
                         ctrl_img_list.append(str(gen_img_config.ctrl_img_2))
                     elif gen_img_config.ctrl_img_2 is not None:
-                        ctrl_img_2 = Image.open(gen_img_config.ctrl_img_2).convert("RGB")
+                        ctrl_img_2 = Image.open(gen_img_config.ctrl_img_2).convert("RGBA" if self.sd.load_rgba else "RGB")
                         # convert to 0 to 1 tensor
                         ctrl_img_2 = (
                             TF.to_tensor(ctrl_img_2)
@@ -237,7 +240,7 @@ class SDTrainer(BaseSDTrainProcess):
                         # supports_video_control_images handle it in get_prompt_embeds
                         ctrl_img_list.append(str(gen_img_config.ctrl_img_3))
                     elif gen_img_config.ctrl_img_3 is not None:
-                        ctrl_img_3 = Image.open(gen_img_config.ctrl_img_3).convert("RGB")
+                        ctrl_img_3 = Image.open(gen_img_config.ctrl_img_3).convert("RGBA" if self.sd.load_rgba else "RGB")
                         # convert to 0 to 1 tensor
                         ctrl_img_3 = (
                             TF.to_tensor(ctrl_img_3)
@@ -267,10 +270,14 @@ class SDTrainer(BaseSDTrainProcess):
                     positive = self.sd.encode_prompt(gen_img_config.prompt).to('cpu')
                     negative = self.sd.encode_prompt(gen_img_config.negative_prompt).to('cpu')
 
-                self.sd.sample_prompts_cache.append({
+                cache.append({
                     'conditional': positive,
                     'unconditional': negative
                 })
+            if sample_config is self.first_sample_config and sample_config is not self.sample_config:
+                self.sd.first_sample_prompts_cache = cache
+            else:
+                self.sd.sample_prompts_cache = cache
 
 
     def before_dataset_load(self):
@@ -307,6 +314,7 @@ class SDTrainer(BaseSDTrainProcess):
 
     def hook_before_train_loop(self):
         super().hook_before_train_loop()
+        self.qwen21_controller = None
         if self.is_caching_text_embeddings:
             # make sure model is on cpu for this part so we don't oom.
             self.sd.unet.to('cpu')
@@ -383,6 +391,8 @@ class SDTrainer(BaseSDTrainProcess):
                     self.diff_output_preservation_embeds = self.cached_dop_class_embeds
                 
                 self.cache_sample_prompts()
+                if self.model_config.arch == 'qwen_image_2' and self.first_sample_config is not self.sample_config:
+                    self.cache_sample_prompts(self.first_sample_config)
 
                 print_acc("\n***** UNLOADING TEXT ENCODER *****")
                 if self.is_caching_text_embeddings:
@@ -446,6 +456,11 @@ class SDTrainer(BaseSDTrainProcess):
                 except:
                     pass
 
+
+        if self.model_config.arch == 'qwen_image_2' and self.train_config.qwen_image_21.get('profile') != 'legacy':
+            from toolkit.qwen_image21.training import Qwen21TrainingController
+            self.qwen21_controller = Qwen21TrainingController(self)
+            self.qwen21_controller.prepare()
 
     def process_output_for_turbo(self, pred, noisy_latents, timesteps, noise, batch):
         # to process turbo learning, we make one big step from our current timestep to the end
@@ -1065,6 +1080,9 @@ class SDTrainer(BaseSDTrainProcess):
                 # add min_snr_gamma
                 loss = apply_snr_weight(loss, timesteps, self.sd.noise_scheduler, self.train_config.min_snr_gamma)
 
+        controller = getattr(self, 'qwen21_controller', None)
+        if controller is not None:
+            loss = controller.observe_loss(loss, batch, timesteps)
         loss = loss.mean()
 
         # check for audio loss
@@ -2346,12 +2364,16 @@ class SDTrainer(BaseSDTrainProcess):
         # flush()
 
     def hook_train_loop(self, batch: Union[DataLoaderBatchDTO, List[DataLoaderBatchDTO]]):
+        controller = getattr(self, 'qwen21_controller', None)
+        if controller is not None:
+            controller.begin_step()
         if isinstance(batch, list):
             batch_list = batch
         else:
             batch_list = [batch]
         total_loss = None
-        self.optimizer.zero_grad()
+        if controller is None or not controller.accumulation_pending:
+            self.optimizer.zero_grad()
         # micro-batches per optimizer step: a batch list (gradient_accumulation) or repeated
         # calls (gradient_accumulation_steps). -1 (whole epoch) has no fixed count; left summed.
         n_accum = len(batch_list)
@@ -2381,7 +2403,7 @@ class SDTrainer(BaseSDTrainProcess):
                 torch.cuda.empty_cache()
 
 
-        if not self.is_grad_accumulation_step:
+        if not self.is_grad_accumulation_step and (controller is None or controller.has_training_signal):
             # grads of memory-managed (offloaded) params are async D2H copies into
             # pinned tensors; join them before anything on the CPU reads .grad
             sync_grad_transfers()
@@ -2406,9 +2428,15 @@ class SDTrainer(BaseSDTrainProcess):
             # gradient accumulation. Just a place for breakpoint
             pass
 
+        if controller is not None:
+            controller.accumulation_pending = self.is_grad_accumulation_step
+            if not controller.accumulation_pending:
+                self.optimizer.zero_grad(set_to_none=True)
+
         # TODO Should we only step scheduler on grad step? If so, need to recalculate last step
         with self.timer('scheduler_step'):
-            self.lr_scheduler.step()
+            if controller is None or controller.adaptive is None:
+                self.lr_scheduler.step()
 
         if self.embedding is not None:
             with self.timer('restore_embeddings'):

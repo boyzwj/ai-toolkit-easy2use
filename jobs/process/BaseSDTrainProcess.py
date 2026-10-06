@@ -83,6 +83,8 @@ class BaseSDTrainProcess(BaseTrainProcess):
 
     def __init__(self, process_id: int, job, config: OrderedDict, custom_pipeline=None):
         super().__init__(process_id, job, config)
+        from toolkit.qwen_image21.config import configure_qwen21_training
+        configure_qwen21_training(self.config)
         self.accelerator: Accelerator = get_accelerator()
         if self.accelerator.is_local_main_process:
             transformers.utils.logging.set_verbosity_warning()
@@ -281,6 +283,24 @@ class BaseSDTrainProcess(BaseTrainProcess):
         return generate_image_config_list
 
     def sample(self, step=None, is_first=False):
+        cached_prompts = getattr(self.sd, 'sample_prompts_cache', None)
+        if is_first and getattr(self.sd, 'first_sample_prompts_cache', None) is not None:
+            self.sd.sample_prompts_cache = self.sd.first_sample_prompts_cache
+        try:
+            return self._sample(step=step, is_first=is_first)
+        except torch.OutOfMemoryError:
+            if getattr(self, 'qwen21_controller', None) is None:
+                raise
+            print_acc("Qwen preview ran out of memory; training state restored, continuing training")
+            flush()
+        finally:
+            self.sd.sample_prompts_cache = cached_prompts
+            if self.ema is not None:
+                self.ema.train()
+            if self.adapter is not None and isinstance(self.adapter, CustomAdapter):
+                self.adapter.is_sampling = False
+
+    def _sample(self, step=None, is_first=False):
         if not self.accelerator.is_main_process:
             return
         flush()
@@ -507,6 +527,9 @@ class BaseSDTrainProcess(BaseTrainProcess):
     def save(self, step=None):
         if not self.accelerator.is_main_process:
             return
+        controller = getattr(self, 'qwen21_controller', None)
+        if controller is not None and step is None:
+            controller.finish_epoch()
         flush()
         if self.ema is not None:
             # always save params as ema
@@ -699,6 +722,7 @@ class BaseSDTrainProcess(BaseTrainProcess):
                 json.dump(json_data, f, indent=4)
         
         print_acc(f"Saved checkpoint to {file_path}")
+        training_checkpoint_path = file_path
 
         # save optimizer
         if self.optimizer is not None:
@@ -720,6 +744,8 @@ class BaseSDTrainProcess(BaseTrainProcess):
 
         if self.ema is not None:
             self.ema.train()
+        if controller is not None:
+            controller.save_checkpoint(training_checkpoint_path, next_step=self.step_num + (step is not None))
         flush()
 
     # Called before the model is loaded
@@ -1097,6 +1123,7 @@ class BaseSDTrainProcess(BaseTrainProcess):
 
             with self.timer('prepare_latents'):
                 dtype = get_torch_dtype(self.train_config.dtype)
+                qwen_recipe = self.model_config.arch == 'qwen_image_2' and self.train_config.qwen_image_21.get('profile') != 'legacy'
                 imgs = None
                 is_reg = any(batch.get_is_reg_list())
                 if batch.tensor is not None:
@@ -1108,7 +1135,7 @@ class BaseSDTrainProcess(BaseTrainProcess):
                         # do it ad contrast
                         imgs = reduce_contrast(imgs, self.train_config.img_multiplier)
                 if batch.latents is not None:
-                    latents = batch.latents.to(self.device_torch, dtype=dtype)
+                    latents = batch.latents.to(self.device_torch, dtype=torch.float32 if qwen_recipe else dtype)
                     batch.latents = latents
                 else:
                     # normalize to
@@ -1303,10 +1330,21 @@ class BaseSDTrainProcess(BaseTrainProcess):
             with self.timer('convert_timestep_indices_to_timesteps'):
                 # convert the timestep_indices to a timestep
                 timesteps = self.sd.noise_scheduler.timesteps[timestep_indices.long()]
+                if self.train_config.timestep_type == 'shifted_logit_normal':
+                    # Training draws are continuous, rather than indices into
+                    # an inference grid with terminal stretching.
+                    options = self.train_config.qwen_image_21
+                    timesteps = self.sd.noise_scheduler.sample_training_timesteps(
+                        batch_size, latents=latents,
+                        patch_size=resolve_flowmatch_patch_size(self.sd),
+                        min_t=float(options.get('min_timestep', 0.0)),
+                        max_t=float(options.get('max_timestep', 1.0)),
+                    )
                 
             with self.timer('prepare_noise'):
                 # get noise
-                noise = self.get_noise(latents, batch_size, dtype=dtype, batch=batch, timestep=timesteps)
+                qwen_recipe = self.model_config.arch == 'qwen_image_2' and self.train_config.qwen_image_21.get('profile') != 'legacy'
+                noise = self.get_noise(latents, batch_size, dtype=torch.float32 if qwen_recipe else dtype, batch=batch, timestep=timesteps)
 
                 # add dynamic noise offset. Dynamic noise is offsetting the noise to the same channelwise mean as the latents
                 # this will negate any noise offsets
@@ -1723,6 +1761,8 @@ class BaseSDTrainProcess(BaseTrainProcess):
 
         ### HOOK ###
         self.hook_before_model_load()
+        from toolkit.qwen_image21.training import configure_runtime
+        configure_runtime(self)
         model_config_to_load = copy.deepcopy(self.model_config)
 
         if self.is_fine_tuning or self.train_config.merge_network_on_save:
@@ -2497,8 +2537,10 @@ class BaseSDTrainProcess(BaseTrainProcess):
             dataloader_reg = None
             dataloader_iterator_reg = None
 
-        # zero any gradients
-        optimizer.zero_grad()
+        # Keep partial Qwen accumulation restored from the checkpoint sidecar.
+        controller = getattr(self, 'qwen21_controller', None)
+        if controller is None or not controller.accumulation_pending:
+            optimizer.zero_grad()
 
         self.lr_scheduler.step(self.step_num)
 
@@ -2577,8 +2619,14 @@ class BaseSDTrainProcess(BaseTrainProcess):
                         except StopIteration:
                             with self.timer('reset_batch'):
                                 # hit the end of an epoch, reset
-                                dataloader_iterator = iter(dataloader)
-                                trigger_dataloader_setup_epoch(dataloader)
+                                controller = getattr(self, 'qwen21_controller', None)
+                                if controller is not None:
+                                    controller.dataloader_epoch_boundary()
+                                    trigger_dataloader_setup_epoch(dataloader)
+                                    dataloader_iterator = iter(dataloader)
+                                else:
+                                    dataloader_iterator = iter(dataloader)
+                                    trigger_dataloader_setup_epoch(dataloader)
                                 self.epoch_num += 1
                                 if self.train_config.gradient_accumulation_steps == -1:
                                     # if we are accumulating for an entire epoch, trigger a step
@@ -2622,6 +2670,11 @@ class BaseSDTrainProcess(BaseTrainProcess):
                 else:
                     raise  # not an OOM; surface real errors
             if did_oom:
+                controller = getattr(self, 'qwen21_controller', None)
+                if controller is not None:
+                    controller.accumulation_pending = False
+                    controller.has_training_signal = False
+                    self.grad_accumulation_step = 0
                 self.num_consecutive_oom += 1
                 if self.num_consecutive_oom > 3:
                     raise RuntimeError("OOM during training step 3 times in a row, aborting training")
@@ -2707,7 +2760,9 @@ class BaseSDTrainProcess(BaseTrainProcess):
                         self.save(self.step_num)
                         self.ensure_params_requires_grad()
                         # clear any grads
-                        optimizer.zero_grad()
+                        controller = getattr(self, 'qwen21_controller', None)
+                        if controller is None or not controller.accumulation_pending:
+                            optimizer.zero_grad()
                         flush()
                         flush_next = True
                         if self.progress_bar is not None:
@@ -2811,6 +2866,9 @@ class BaseSDTrainProcess(BaseTrainProcess):
         if not self.train_config.disable_sampling:
             self.sample(self.step_num)
             self.logger.commit(step=self.step_num)
+        controller = getattr(self, 'qwen21_controller', None)
+        if controller is not None:
+            controller.close()
         print_acc("")
         if self.accelerator.is_main_process:
             self.logger.finish()

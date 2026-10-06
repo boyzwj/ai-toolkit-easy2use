@@ -251,8 +251,19 @@ class QwenImage21SwiGLUFeedForward(nn.Module):
         self.out = nn.Linear(mlp_hidden_size, hidden_size, bias=False)
         self.activation_fn = nn.SiLU()
 
+    def enable_split_lora(self):
+        from toolkit.qwen_image21.lora import QwenImage21LoRAProjection
+        if not hasattr(self, "gate_layer"):
+            self.gate_layer = QwenImage21LoRAProjection(self.gate_up.in_features, self.gate_up.out_features // 2)
+            self.proj = QwenImage21LoRAProjection(self.gate_up.in_features, self.gate_up.out_features // 2)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         gate, up = self.gate_up(hidden_states).chunk(2, dim=-1)
+        if hasattr(self, "gate_layer"):
+            if self.gate_layer.enabled:
+                gate = gate + self.gate_layer(hidden_states)
+            if self.proj.enabled:
+                up = up + self.proj(hidden_states)
         return self.out(self.activation_fn(gate) * up)
 
 

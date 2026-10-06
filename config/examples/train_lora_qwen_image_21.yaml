@@ -1,0 +1,62 @@
+---
+job: extension
+config:
+  name: qwen21_person_v1
+  process:
+    - type: sd_trainer
+      training_folder: output
+      device: cuda:0
+      training_seed: 42
+      trigger_word: person_tok
+      model:
+        arch: qwen_image_2
+        name_or_path: Comfy-Org/Qwen-Image-2.1
+        model_kwargs:
+          rgba: false
+      network:
+        type: lora
+        # Defaults are provided by the selected recipe.
+      datasets:
+        - folder_path: /path/to/person/images
+          caption_ext: txt
+          caption_dropout_rate: 0.05
+          # For edits, add control_path: /path/to/reference/images.
+          # Reference and target files have matching basenames.
+      train:
+        batch_size: 1
+        gradient_accumulation: 1
+        qwen_image_21:
+          # fast / standard / identity / style / edit / edit_standard
+          # identity trains blocks 10..14 only, at 512 px / rank 8.
+          profile: fast
+          epochs: 30
+          memory_plan: auto
+          compile: auto
+          training_adapter: true
+          loss_watch: true
+          per_image_lr: false
+          # Frozen style/context LoRA, active in training and previews:
+          # context_lora_path: /path/to/style.safetensors
+          # context_lora_strength: 1.0
+          # Preview-only turbo LoRA (never added to the saved user LoRA):
+          # preview_lora_path: /path/to/turbo.safetensors
+          # preview_lora_strength: 1.0
+          # min_timestep: 0.0
+          # max_timestep: 1.0
+      save:
+        dtype: float16
+        max_step_saves_to_keep: 4
+      sample:
+        sampler: flowmatch
+        width: 704
+        height: 704
+        guidance_scale: 1.0
+        sample_steps: 25
+        seed: 42
+        walk_seed: false
+        samples:
+          - prompt: a portrait of [trigger], natural light, neutral background
+          - prompt: a photo of [trigger] outdoors, smiling
+meta:
+  name: '[name]'
+  version: '1.0'

@@ -154,6 +154,7 @@ class QwenImage21PromptEncoder:
         }
         if flat_images:
             processor_kwargs["images"] = flat_images
+            processor_kwargs["images_kwargs"] = {"do_resize": False}
         model_inputs = self.processor(**processor_kwargs).to(device)
 
         forward_kwargs = {
@@ -179,7 +180,8 @@ class QwenImage21PromptEncoder:
             lambda module, args, output: args[0]
         )
         try:
-            outputs = self.text_encoder(**forward_kwargs)
+            # Conditioning needs hidden states; vocabulary logits waste memory.
+            outputs = self.text_encoder.model(**forward_kwargs, use_cache=False)
         finally:
             handle.remove()
         hidden_states = outputs.hidden_states[-1]
@@ -368,6 +370,10 @@ class QwenImage21Pipeline:
         latents = latents.to(device, dtype=dtype)
 
         scheduler = model.get_train_scheduler()
+        options = getattr(model, "qwen_training_options", {})
+        preview_lora = getattr(model, "preview_lora", None)
+        if preview_lora is not None and preview_lora.is_active:
+            scheduler.register_to_config(shift_terminal=options.get("preview_shift_terminal"))
         sigmas = np.linspace(1.0, 1 / num_inference_steps, num_inference_steps)
         mu = calculate_shift(
             latent_height * latent_width,
@@ -384,8 +390,14 @@ class QwenImage21Pipeline:
         cond = model.pad_prompt_embeds(conditional_embeds)
         uncond = model.pad_prompt_embeds(unconditional_embeds) if do_cfg else None
 
-        for timestep in scheduler.timesteps:
+        use_kv_cache = model.model_config.model_kwargs.get("kv_cache", False)
+        if use_kv_cache:
+            from .transformer import QwenImage21KVCache
+            conditional_cache = QwenImage21KVCache(len(transformer.transformer_blocks))
+            unconditional_cache = QwenImage21KVCache(len(transformer.transformer_blocks)) if do_cfg else None
+        for step_index, timestep in enumerate(scheduler.timesteps):
             t = timestep.expand(latents.shape[0]).to(device, dtype=dtype) / 1000
+            mode = "extract" if step_index == 0 else "cached"
             noise_pred = run_transformer(
                 transformer,
                 latents,
@@ -393,6 +405,7 @@ class QwenImage21Pipeline:
                 *cond,
                 condition_latents=condition_latents,
                 condition_shapes=condition_shapes,
+                **({"kv_cache": conditional_cache, "kv_cache_mode": mode} if use_kv_cache else {}),
             )
             if do_cfg:
                 uncond_pred = run_transformer(
@@ -402,6 +415,7 @@ class QwenImage21Pipeline:
                     *uncond,
                     condition_latents=condition_latents,
                     condition_shapes=condition_shapes,
+                    **({"kv_cache": unconditional_cache, "kv_cache_mode": mode} if use_kv_cache else {}),
                 )
                 noise_pred = uncond_pred + guidance_scale * (noise_pred - uncond_pred)
 
