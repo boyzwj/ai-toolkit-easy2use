@@ -641,7 +641,7 @@ export const AI_TOOLKIT_UI_MODELS: ModelArch[] = [
       "config.process[0].train.optimizer_params.weight_decay": [0, 1e-4],
       "config.process[0].train.qwen_image_21": [{
         profile: "fast", adaptive_lr: true, adaptive_lr_min: 2e-4, adaptive_lr_max: 4e-4,
-        training_adapter: true, loss_watch: true, memory_plan: "auto", compile: "auto",
+        training_adapter: true, loss_watch: true, epochs: 30, memory_plan: "auto", compile: "auto",
       }, undefined],
       "config.process[0].datasets[0].resolution": [[704], [512, 768, 1024]],
       "config.process[0].datasets[0].cache_latents_to_disk": [true, false],
