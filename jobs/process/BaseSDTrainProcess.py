@@ -869,7 +869,7 @@ class BaseSDTrainProcess(BaseTrainProcess):
 
             # Filter out non-existent paths and sort by creation time
             if paths:
-                paths = [p for p in paths if os.path.exists(p)]
+                paths = [p for p in paths if os.path.exists(p) and not p.endswith('.training-state')]
                 # remove false positives
                 if '_LoRA' not in name:
                     paths = [p for p in paths if '_LoRA' not in p]

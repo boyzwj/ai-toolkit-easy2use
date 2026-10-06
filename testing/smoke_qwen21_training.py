@@ -63,14 +63,31 @@ def main():
     config_path = output / "config.yaml"
     print(f"Qwen real-model smoke output: {output}", flush=True)
     checkpoint = output / "output/qwen21_smoke/qwen21_smoke.safetensors"
+    previous_optimizer_steps = None
     for steps in (3, 4):
         config["config"]["process"][0]["train"]["steps"] = steps
         config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
-        subprocess.run([sys.executable, "run.py", str(config_path)], cwd=root, check=True,
-                       env={**os.environ, "SEED": "42"})
+        lines = []
+        command = [sys.executable, "run.py", str(config_path)]
+        with subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              text=True, bufsize=1, env={**os.environ, "SEED": "42", "PYTHONUNBUFFERED": "1"}) as process:
+            for line in process.stdout:
+                print(line, end="", flush=True)
+                lines.append(line)
+            if process.wait():
+                raise subprocess.CalledProcessError(process.returncode, command)
+        log = "".join(lines)
+        (output / f"stage-{steps}.log").write_text(log, encoding="utf-8")
+        if steps == 4:
+            assert "Restored Qwen raw weights, EMA, optimizer and LR at step 3" in log, "Job did not actually resume"
         state = torch.load(str(checkpoint) + ".training-state", map_location="cpu", weights_only=True)
         assert state["next_step"] == steps, state["next_step"]
         assert state["optimizer"]["state"], "Optimizer did not take a step"
+        optimizer_steps = {key: int(value["step"]) for key, value in state["optimizer"]["state"].items()}
+        if previous_optimizer_steps is not None:
+            updates = 4 // args.gradient_accumulation_steps - 3 // args.gradient_accumulation_steps
+            assert all(value == previous_optimizer_steps[key] + updates for key, value in optimizer_steps.items()), "Resume repeated optimizer updates"
+        previous_optimizer_steps = optimizer_steps
         assert all(torch.isfinite(p).all() for p in state["raw_weights"].values()), "Non-finite adapter weights"
         print(f"Validated checkpoint and resume state at step {steps}", flush=True)
     report = {"output": str(output), "profile": args.profile, "quantize": args.quantize,

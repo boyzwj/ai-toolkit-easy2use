@@ -487,6 +487,15 @@ class RepairAndEvaluationTests(unittest.TestCase):
 
 
 class TrainingStateTests(unittest.TestCase):
+    def test_checkpoint_discovery_ignores_newer_state_sidecar(self):
+        from jobs.process.BaseSDTrainProcess import BaseSDTrainProcess
+        with tempfile.TemporaryDirectory() as folder:
+            checkpoint = Path(folder) / "test.safetensors"
+            save_file({"weight": torch.ones(1)}, str(checkpoint))
+            Path(str(checkpoint) + ".training-state").write_bytes(b"newer resume state")
+            trainer = SimpleNamespace(save_root=folder, job=SimpleNamespace(name="test"), network_config=None)
+            self.assertEqual(BaseSDTrainProcess.get_latest_save_path(trainer), str(checkpoint))
+
     def test_partial_accumulation_restores_gradients_and_counter(self):
         with tempfile.TemporaryDirectory() as folder:
             trainer = self.make_trainer(folder)
